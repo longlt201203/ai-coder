@@ -1,0 +1,151 @@
+{
+  "name": "ai-coder",
+  "displayName": "ai-coder",
+  "description": "AI-powered coding assistant with context-aware chat",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-coder.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "ai-coder.configureApiKey",
+        "title": "AI Coder: Configure Anthropic API Key"
+      },
+      {
+        "command": "ai-coder.directConfigureApiKey",
+        "title": "AI Coder: Direct Configure API Key"
+      },
+      {
+        "command": "ai-coder.openChat",
+        "title": "AI Coder: Open Chat"
+      },
+      {
+        "command": "ai-coder.explainCode",
+        "title": "AI Coder: Explain Selected Code"
+      },
+      {
+        "command": "ai-coder.generateCode",
+        "title": "AI Coder: Generate Code"
+      },
+      {
+        "command": "ai-coder.optimizeCode",
+        "title": "AI Coder: Optimize Selected Code"
+      },
+      {
+        "command": "ai-coder.addFileToContext",
+        "title": "AI Coder: Add File to Context"
+      },
+      {
+        "command": "ai-coder.addFolderToContext",
+        "title": "AI Coder: Add Folder to Context"
+      },
+      {
+        "command": "ai-coder.clearContext",
+        "title": "AI Coder: Clear Context"
+      },
+      {
+        "command": "ai-coder.showContext",
+        "title": "AI Coder: Show Current Context"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ai-coder.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-coder.helloWorld",
+        "key": "ctrl+shift+h",
+        "mac": "cmd+shift+h"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ai-coder",
+          "title": "AI Coder",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ai-coder": [
+        {
+          "id": "ai-coder.chatView",
+          "name": "AI Chat",
+          "type": "webview"
+        },
+        {
+          "id": "ai-coder.contextView",
+          "name": "Context Files"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ai-coder.explainCode",
+          "when": "editorHasSelection",
+          "group": "ai-coder"
+        },
+        {
+          "command": "ai-coder.optimizeCode",
+          "when": "editorHasSelection",
+          "group": "ai-coder"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "ai-coder.addFileToContext",
+          "when": "view == ai-coder.contextView",
+          "group": "navigation"
+        },
+        {
+          "command": "ai-coder.addFolderToContext",
+          "when": "view == ai-coder.contextView",
+          "group": "navigation"
+        },
+        {
+          "command": "ai-coder.clearContext",
+          "when": "view == ai-coder.contextView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "yarn run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "yarn run compile && yarn run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.98.0",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.21.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.6.0"
+  }
+}
