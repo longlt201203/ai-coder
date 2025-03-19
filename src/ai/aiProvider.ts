@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { MessageParam, ToolUnion } from '@anthropic-ai/sdk/resources/index.mjs';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Stream } from '@anthropic-ai/sdk/streaming.mjs';
 
 // Define a context item interface for more structured context
 export interface ContextItem {
@@ -86,11 +87,11 @@ class AnthropicProvider implements AIProvider {
             
             // Call Anthropic API with streaming and tools
             const stream = await this.anthropic!.messages.create({
-                model: "claude-3-7-sonnet-20250219",
+                model: "claude-3-5-sonnet-latest",
                 max_tokens: 4000,
-                messages: messages as MessageParam[],
+                messages: messages,
                 temperature: 0.7,
-                tools: tools as ToolUnion[],
+                tools: tools,
                 stream: true,
             });
             
@@ -147,7 +148,7 @@ class AnthropicProvider implements AIProvider {
     /**
      * Prepare messages for the API call
      */
-    private prepareMessages(contextText: string, prompt: string): any[] {
+    private prepareMessages(contextText: string, prompt: string): MessageParam[] {
         // Get chat history
         const history = this.contextManager.getHistory();
         
@@ -174,13 +175,13 @@ class AnthropicProvider implements AIProvider {
             content: contextText + prompt
         });
         
-        return messages;
+        return messages as MessageParam[];
     }
     
     /**
      * Prepare tools for the API call
      */
-    private prepareTools(): any[] {
+    private prepareTools(): ToolUnion[] {
         return [{
             name: "write_file",
             description: "Write or modify a file with the given content",
@@ -210,7 +211,9 @@ class AnthropicProvider implements AIProvider {
      * Process the response stream and handle tool uses
      */
     private async processResponseStream(
-        stream: any, 
+        stream: Stream<Anthropic.Messages.RawMessageStreamEvent> & {
+            _request_id?: string | null;
+        }, 
         onPartialResponse?: (text: string) => void
     ): Promise<string> {
         let fullResponse = '';
@@ -223,58 +226,73 @@ class AnthropicProvider implements AIProvider {
         for await (const chunk of stream) {
             console.log(`Received chunk type: ${chunk.type}`, JSON.stringify(chunk, null, 2));
             
-            if (chunk.type === 'content_block_delta') {
-                if (chunk.delta.type === 'text_delta') {
-                    const textChunk = chunk.delta.text || '';
-                    fullResponse += textChunk;
-                    
-                    // Call the callback if provided
-                    if (onPartialResponse) {
-                        onPartialResponse(textChunk);
-                    }
-                } else if (chunk.delta.type === 'input_json_delta') {
-                    // Accumulate JSON for the current tool use
-                    const toolId = chunk.delta.tool_use_id;
-                    if (!toolInputAccumulator.has(toolId)) {
-                        toolInputAccumulator.set(toolId, '');
-                    }
-                    toolInputAccumulator.set(
-                        toolId, 
-                        toolInputAccumulator.get(toolId) + chunk.delta.partial_json
-                    );
+            switch (chunk.type) {
+                case 'message_start': {
+                    console.log('Start of response');
+                    break;
                 }
-            } else if (chunk.type === 'content_block_start') {
-                if (chunk.content_block.type === 'tool_use') {
-                    // Initialize accumulator for this tool use
-                    toolInputAccumulator.set(chunk.content_block.id, '');
-                    toolUses.push({
-                        id: chunk.content_block.id,
-                        name: chunk.content_block.name
-                    });
+                case 'message_delta': {
+                    console.log('Begin a new message');
+                    break;
                 }
-            } else if (chunk.type === 'content_block_stop') {
-                // When a tool use is complete, process it immediately
-                if (chunk.content_block.type === 'tool_use' && this.fileModificationHandler) {
-                    const toolId = chunk.content_block.id;
-                    const toolUse = toolUses.find(t => t.id === toolId);
-                    
-                    if (toolUse && toolUse.name === 'write_file') {
-                        const paramString = toolInputAccumulator.get(toolId) || '';
-                        await this.processWriteFileTool(paramString, onPartialResponse);
-                    }
+                case 'content_block_start': {
+                    console.log('Begin a content block');
+                    break;
                 }
-            } else if (chunk.type === 'message_delta') {
-                // Handle message delta (this happens at the end of the stream)
-                console.log('Message completed');
-            } else {
-                // Log any other chunk types for debugging
-                console.log(`Received unhandled chunk type: ${chunk.type}`);
+                case 'content_block_delta': {
+                    console.log('Content block delta');
+                    break;
+                }
+                case 'content_block_stop': {
+                    console.log('End of content block');
+                    break;
+                }
+                case 'message_stop': {
+                    console.log('End of response');
+                    break;
+                }
             }
-        }
-        
-        // Process the response for file modifications using regex as fallback
-        if (this.fileModificationHandler) {
-            await this.processResponseStream(fullResponse);
+
+
+
+            // if (chunk.type === 'content_block_delta') {
+            //     if (chunk.delta.type === 'text_delta') {
+            //         const textChunk = chunk.delta.text || '';
+            //         fullResponse += textChunk;
+                    
+            //         // Call the callback if provided
+            //         if (onPartialResponse) {
+            //             onPartialResponse(textChunk);
+            //         }
+            //     } else if (chunk.delta.type === 'input_json_delta') {
+            //         // Accumulate JSON for the current tool use
+            //         // const toolId = chunk.delta.tool_use_id;
+            //         // if (!toolInputAccumulator.has(toolId)) {
+            //         //     toolInputAccumulator.set(toolId, '');
+            //         // }
+            //         // toolInputAccumulator.set(
+            //         //     toolId, 
+            //         //     toolInputAccumulator.get(toolId) + chunk.delta.partial_json
+            //         // );
+            //     }
+            // } else if (chunk.type === 'content_block_start') {
+            //     if (chunk.content_block.type === 'tool_use') {
+            //         // Initialize accumulator for this tool use
+            //         // toolInputAccumulator.set(chunk.content_block.id, '');
+            //         // toolUses.push({
+            //         //     id: chunk.content_block.id,
+            //         //     name: chunk.content_block.name
+            //         // });
+            //     }
+            // } else if (chunk.type === 'content_block_stop') {
+                
+            // } else if (chunk.type === 'message_delta') {
+            //     // Handle message delta (this happens at the end of the stream)
+            //     console.log('Message completed');
+            // } else {
+            //     // Log any other chunk types for debugging
+            //     console.log(`Received unhandled chunk type: ${chunk.type}`);
+            // }
         }
         
         return fullResponse;
