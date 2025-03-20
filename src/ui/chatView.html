@@ -124,40 +124,61 @@
             color: var(--vscode-editor-foreground);
         }
         
-        /* Context section styling */
+        /* Updated context section styling */
         .context-section {
-            margin-bottom: 10px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 10px;
+            margin-bottom: 16px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
         }
         
         .context-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
+            background-color: var(--vscode-editor-background);
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        
+        .context-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
         }
         
         .context-items {
-            max-height: 150px;
+            max-height: 200px;
             overflow-y: auto;
-            margin-bottom: 5px;
+            padding: 8px 0;
+        }
+        
+        .empty-context {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            padding: 8px 12px;
         }
         
         .context-item {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 3px 5px;
+            padding: 6px 12px;
             border-radius: 3px;
-            margin-bottom: 2px;
+            margin: 0 4px;
         }
         
         .context-item:hover {
             background-color: var(--vscode-list-hoverBackground);
         }
         
+        .context-item-icon {
+            margin-right: 8px;
+            color: var(--vscode-symbolIcon-fileForeground);
+        }
+        
+        .context-item-icon.folder {
+            color: var(--vscode-symbolIcon-folderForeground);
+        }
+        
         .context-item-name {
+            flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -166,29 +187,48 @@
         .context-item-remove {
             cursor: pointer;
             opacity: 0.7;
+            padding: 4px;
+            border-radius: 3px;
         }
         
         .context-item-remove:hover {
             opacity: 1;
+            background-color: var(--vscode-list-hoverBackground);
         }
         
         .context-actions {
             display: flex;
             justify-content: space-between;
+            padding: 8px 12px;
+            background-color: var(--vscode-editor-background);
+            border-top: 1px solid var(--vscode-panel-border);
         }
         
         .context-button {
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
-            padding: 4px 8px;
-            border-radius: 2px;
+            padding: 6px 12px;
+            border-radius: 3px;
             cursor: pointer;
             font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
         
         .context-button:hover {
             background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        .context-button.secondary {
+            background-color: transparent;
+            color: var(--vscode-button-secondaryForeground);
+            border: 1px solid var(--vscode-button-secondaryBackground);
+        }
+        
+        .context-button.secondary:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
         }
     </style>
 </head>
@@ -204,8 +244,14 @@
                 <div class="empty-context">No context items selected</div>
             </div>
             <div class="context-actions">
-                <button class="context-button" id="addContextBtn">Add Files/Folders</button>
-                <button class="context-button" id="clearContextBtn">Clear All</button>
+                <button class="context-button" id="addContextBtn">
+                    <span class="codicon codicon-add"></span>
+                    Add Files/Folders
+                </button>
+                <button class="context-button secondary" id="clearContextBtn">
+                    <span class="codicon codicon-clear-all"></span>
+                    Clear All
+                </button>
             </div>
         </div>
         
@@ -258,38 +304,43 @@
         }
         
         // Handle context item updates from extension
+        // Update context items display
         function updateContextItems(items) {
-            contextItemsContainer.innerHTML = '';
+            const contextItemsContainer = document.getElementById('contextItems');
             
             if (!items || items.length === 0) {
                 contextItemsContainer.innerHTML = '<div class="empty-context">No context items selected</div>';
                 return;
             }
             
-            items.forEach(item => {
-                const itemElement = document.createElement('div');
-                itemElement.className = 'context-item';
+            let html = '';
+            for (const item of items) {
+                const iconClass = item.isDirectory ? 'codicon-folder' : 'codicon-file';
+                const iconType = item.isDirectory ? 'folder' : 'file';
                 
-                const nameElement = document.createElement('div');
-                nameElement.className = 'context-item-name';
-                nameElement.title = item.path;
-                nameElement.textContent = item.name + (item.isDirectory ? ' (folder)' : '');
-                
-                const removeElement = document.createElement('div');
-                removeElement.className = 'context-item-remove';
-                removeElement.textContent = '✕';
-                removeElement.title = 'Remove from context';
-                removeElement.onclick = () => {
+                html += `
+                    <div class="context-item" data-path="${item.path}">
+                        <span class="context-item-icon ${iconType} codicon ${iconClass}"></span>
+                        <span class="context-item-name" title="${item.path}">${item.name}</span>
+                        <span class="context-item-remove codicon codicon-close" title="Remove from context"></span>
+                    </div>
+                `;
+            }
+            
+            contextItemsContainer.innerHTML = html;
+            
+            // Add event listeners to remove buttons
+            document.querySelectorAll('.context-item-remove').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const item = e.target.closest('.context-item');
+                    const path = item.dataset.path;
                     vscode.postMessage({
                         type: 'contextAction',
                         action: 'remove',
-                        path: item.path
+                        path: path
                     });
-                };
-                
-                itemElement.appendChild(nameElement);
-                itemElement.appendChild(removeElement);
-                contextItemsContainer.appendChild(itemElement);
+                    e.stopPropagation();
+                });
             });
         }
         

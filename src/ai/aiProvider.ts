@@ -5,6 +5,7 @@ import { MessageParam, ToolUnion } from '@anthropic-ai/sdk/resources/index.mjs';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Stream } from '@anthropic-ai/sdk/streaming.mjs';
+import { aiTools } from './aiTools';
 
 // Define a context item interface for more structured context
 export interface ContextItem {
@@ -218,9 +219,9 @@ class AnthropicProvider implements AIProvider {
     ): Promise<string> {
         let fullResponse = '';
         
-        // Store the function call and parameters
-        const toolUses: {id: string, name: string}[] = [];
-        const toolInputAccumulator = new Map<string, string>();
+        // Store tool use information
+        let currentToolName = '';
+        let currentStrParams = '';
     
         // Process the stream
         for await (const chunk of stream) {
@@ -237,14 +238,37 @@ class AnthropicProvider implements AIProvider {
                 }
                 case 'content_block_start': {
                     console.log('Begin a content block');
+                    if (chunk.content_block.type === 'tool_use') {
+                        currentToolName = chunk.content_block.name;
+                        currentStrParams = '';
+                    }
                     break;
                 }
                 case 'content_block_delta': {
                     console.log('Content block delta');
+                    if (chunk.delta.type === 'text_delta') {
+                        const textChunk = chunk.delta.text || '';
+                        fullResponse += textChunk;
+                        
+                        // Call the callback if provided
+                        if (onPartialResponse) {
+                            onPartialResponse(textChunk);
+                        }
+                    } else if (chunk.delta.type === 'input_json_delta') {
+                        currentStrParams += chunk.delta.partial_json;
+                    }
                     break;
                 }
                 case 'content_block_stop': {
                     console.log('End of content block');
+                    if (currentToolName && currentStrParams) {
+                        // Execute the tool function
+                        await this.executeToolFunction(currentToolName, currentStrParams, onPartialResponse);
+                        
+                        // Reset tool tracking variables
+                        currentToolName = '';
+                        currentStrParams = '';
+                    }
                     break;
                 }
                 case 'message_stop': {
@@ -252,111 +276,33 @@ class AnthropicProvider implements AIProvider {
                     break;
                 }
             }
-
-
-
-            // if (chunk.type === 'content_block_delta') {
-            //     if (chunk.delta.type === 'text_delta') {
-            //         const textChunk = chunk.delta.text || '';
-            //         fullResponse += textChunk;
-                    
-            //         // Call the callback if provided
-            //         if (onPartialResponse) {
-            //             onPartialResponse(textChunk);
-            //         }
-            //     } else if (chunk.delta.type === 'input_json_delta') {
-            //         // Accumulate JSON for the current tool use
-            //         // const toolId = chunk.delta.tool_use_id;
-            //         // if (!toolInputAccumulator.has(toolId)) {
-            //         //     toolInputAccumulator.set(toolId, '');
-            //         // }
-            //         // toolInputAccumulator.set(
-            //         //     toolId, 
-            //         //     toolInputAccumulator.get(toolId) + chunk.delta.partial_json
-            //         // );
-            //     }
-            // } else if (chunk.type === 'content_block_start') {
-            //     if (chunk.content_block.type === 'tool_use') {
-            //         // Initialize accumulator for this tool use
-            //         // toolInputAccumulator.set(chunk.content_block.id, '');
-            //         // toolUses.push({
-            //         //     id: chunk.content_block.id,
-            //         //     name: chunk.content_block.name
-            //         // });
-            //     }
-            // } else if (chunk.type === 'content_block_stop') {
-                
-            // } else if (chunk.type === 'message_delta') {
-            //     // Handle message delta (this happens at the end of the stream)
-            //     console.log('Message completed');
-            // } else {
-            //     // Log any other chunk types for debugging
-            //     console.log(`Received unhandled chunk type: ${chunk.type}`);
-            // }
         }
         
         return fullResponse;
     }
     
     /**
-     * Process a write_file tool use
+     * Execute a tool function based on the tool name and parameters
      */
-    private async processWriteFileTool(
+    private async executeToolFunction(
+        toolName: string, 
         paramString: string, 
         onPartialResponse?: (text: string) => void
     ): Promise<void> {
-        if (!this.fileModificationHandler) {
-            return;
-        }
+        console.log(`Executing tool: ${toolName} with params: ${paramString}`);
         
         try {
             // Parse the JSON parameters
             const params = JSON.parse(paramString);
-            console.log('Parsed params:', params);
-            
-            // Extract file path and content
-            let filePath = params.path || '';
-            const content = params.content || '';
-            const mode = params.mode || 'replace';
-            
-            if (!filePath) {
-                console.error('Error: Missing file path in write_file tool use');
-                if (onPartialResponse) {
-                    onPartialResponse(`\n\n*Error: Missing file path in tool request*\n\n`);
-                }
-                return;
-            }
-            
-            // Resolve relative paths against the workspace folder
-            let resolvedPath = this.resolveFilePath(filePath);
-            if (resolvedPath !== filePath && onPartialResponse) {
-                onPartialResponse(`\n\n*Note: Resolving relative path '${filePath}' to '${resolvedPath}'*\n\n`);
-            }
-            
-            console.log(`Writing to file: ${resolvedPath}, content length: ${content.length}, mode: ${mode}`);
-            
-            // Ensure the directory exists before writing the file
-            this.ensureDirectoryExists(resolvedPath);
-            
-            // Write the file directly instead of using the handler that shows confirmation
-            try {
-                fs.writeFileSync(resolvedPath, content);
-                console.log(`File written successfully: ${resolvedPath}`);
-                
-                // Inform the user about the file modification
-                if (onPartialResponse) {
-                    onPartialResponse(`\n\n*File ${filePath} has been ${mode === 'replace' ? 'updated' : 'modified'} automatically.*\n\n`);
-                }
-            } catch (fsError) {
-                console.error(`Error writing file directly: ${fsError}`);
-                
-                // Fall back to the handler method if direct write fails
-                await this.fileModificationHandler.applyCodeToFile(resolvedPath, content);
+            if (aiTools[toolName]) {
+                await aiTools[toolName](params);
+            } else {
+                throw new Error(`AI tool '${toolName}' not found!`)
             }
         } catch (error) {
-            console.error('Error processing write_file tool use:', error);
+            console.error(`Error executing tool ${toolName}:`, error);
             if (onPartialResponse) {
-                onPartialResponse(`\n\n*Error processing file modification: ${error instanceof Error ? error.message : String(error)}*\n\n`);
+                onPartialResponse(`\n\n*Error executing tool '${toolName}': ${error instanceof Error ? error.message : String(error)}*\n\n`);
             }
         }
     }

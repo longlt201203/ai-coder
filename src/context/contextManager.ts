@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// Add this interface for directory metadata
+interface DirectoryMetadata {
+    lastAnalyzed: string;
+    fileCount: number;
+    files: Array<{
+        path: string;
+        size: number;
+        type: string;
+    }>;
+}
+
 export class ContextManager {
     private chatHistory: { role: string, content: string }[] = [];
     private selectedContextItems: string[] = []; // Store user-selected files/folders
@@ -114,6 +125,11 @@ export class ContextManager {
         // Add user-selected context items
         for (const itemPath of this.selectedContextItems) {
             try {
+                if (!fs.existsSync(itemPath)) {
+                    console.warn(`Skipping non-existent context item: ${itemPath}`);
+                    continue;
+                }
+                
                 const stats = fs.statSync(itemPath);
                 
                 if (stats.isFile()) {
@@ -124,20 +140,34 @@ export class ContextManager {
                         contextItems.push(`File: ${fileName}\n\n${content}`);
                     }
                 } else if (stats.isDirectory()) {
-                    // If it's a directory, add content of up to 5 files
-                    const files = fs.readdirSync(itemPath)
-                        .filter(file => !file.startsWith('.'))
-                        .slice(0, 5)
-                        .map(file => path.join(itemPath, file));
+                    // Check if we have pre-analyzed metadata
+                    const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(itemPath)}`;
+                    const metadata = this.context.globalState.get<DirectoryMetadata>(metadataKey);
                     
-                    for (const file of files) {
-                        if (fs.statSync(file).isFile()) {
-                            const content = await this.getFileContent(file);
-                            if (content) {
-                                const fileName = path.basename(file);
-                                contextItems.push(`File: ${fileName}\n\n${content}`);
+                    if (metadata && metadata.files) {
+                        // Add directory summary
+                        contextItems.push(`Directory: ${itemPath}\nContains ${metadata.fileCount} files. Last analyzed: ${metadata.lastAnalyzed}\n`);
+                        
+                        // Add most relevant files based on the query
+                        // For now, just take the first 5 files
+                        const relevantFiles = metadata.files.slice(0, 5);
+                        
+                        for (const fileInfo of relevantFiles) {
+                            try {
+                                if (fs.existsSync(fileInfo.path)) {
+                                    const content = await this.getFileContent(fileInfo.path);
+                                    if (content) {
+                                        const fileName = path.basename(fileInfo.path);
+                                        contextItems.push(`File: ${fileName}\n\n${content}`);
+                                    }
+                                }
+                            } catch (fileError) {
+                                console.error(`Error processing file ${fileInfo.path}:`, fileError);
                             }
                         }
+                    } else {
+                        // No metadata, use the old method
+                        await this.processDirectoryWithoutMetadata(itemPath, contextItems);
                     }
                 }
             } catch (error) {
@@ -148,24 +178,165 @@ export class ContextManager {
         // Add relevant files (keep this for automatic context)
         const relevantFiles = await this.getRelevantFiles(query);
         for (const file of relevantFiles) {
-            const content = await this.getFileContent(file);
-            if (content) {
-                const fileName = path.basename(file);
-                contextItems.push(`File: ${fileName}\n\n${content}`);
+            try {
+                if (fs.existsSync(file)) {
+                    const content = await this.getFileContent(file);
+                    if (content) {
+                        const fileName = path.basename(file);
+                        contextItems.push(`File: ${fileName}\n\n${content}`);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error processing relevant file ${file}:`, error);
             }
         }
         
         return contextItems;
     }
+    
+    /**
+     * Process a directory without metadata (fallback method)
+     */
+    private async processDirectoryWithoutMetadata(dirPath: string, contextItems: string[]): Promise<void> {
+        // If it's a directory, add content of up to 5 files
+        const files = fs.readdirSync(dirPath)
+            .filter(file => !file.startsWith('.'))
+            .slice(0, 5)
+            .map(file => path.join(dirPath, file));
+        
+        for (const file of files) {
+            if (fs.statSync(file).isFile()) {
+                const content = await this.getFileContent(file);
+                if (content) {
+                    const fileName = path.basename(file);
+                    contextItems.push(`File: ${fileName}\n\n${content}`);
+                }
+            }
+        }
+    }
 
     /**
      * Add a file or folder to the selected context
      */
-    addToSelectedContext(itemPath: string): void {
+    /**
+     * Add an item to the selected context with pre-analysis for folders
+     */
+    async addToSelectedContext(itemPath: string): Promise<void> {
+        // First validate that the path exists before trying to add it
+        if (!fs.existsSync(itemPath)) {
+            console.error(`Cannot add non-existent path to context: ${itemPath}`);
+            vscode.window.showErrorMessage(`Cannot add non-existent path to context: ${itemPath}`);
+            return;
+        }
+
         if (!this.selectedContextItems.includes(itemPath)) {
+            // Check if it's a directory and pre-analyze it
+            try {
+                const stats = fs.statSync(itemPath);
+                
+                if (stats.isDirectory()) {
+                    console.log(`Pre-analyzing directory: ${itemPath}`);
+                    
+                    try {
+                        // Create a metadata file in memory first, don't write to the directory
+                        // Analyze the directory structure and files
+                        const fileList: {path: string, size: number, type: string}[] = [];
+                        this.analyzeDirectory(itemPath, fileList);
+                        
+                        // Store metadata about the directory
+                        const metadata: DirectoryMetadata = {
+                            lastAnalyzed: new Date().toISOString(),
+                            fileCount: fileList.length,
+                            files: fileList
+                        };
+                        
+                        // Store metadata in extension storage instead of writing to the directory
+                        const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(itemPath)}`;
+                        this.context.globalState.update(metadataKey, metadata);
+                        console.log(`Directory analysis complete: ${fileList.length} files found`);
+                    } catch (analyzeError) {
+                        console.error(`Error analyzing directory ${itemPath}:`, analyzeError);
+                        // Continue adding the directory even if analysis fails
+                    }
+                }
+            } catch (error) {
+                console.error(`Error pre-analyzing context item ${itemPath}:`, error);
+                vscode.window.showErrorMessage(`Error adding item to context: ${error instanceof Error ? error.message : String(error)}`);
+                return;
+            }
+            
+            // Add to selected context
             this.selectedContextItems.push(itemPath);
+            
             // Persist selected context
             this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
+        }
+    }
+    
+    /**
+     * Sanitize a path for use as a storage key
+     */
+    private sanitizePathForKey(path: string): string {
+        // Replace characters that might cause issues in keys
+        return path.replace(/[\/\\:*?"<>|]/g, '_');
+    }
+    
+    /**
+     * Analyze a directory recursively and collect file information
+     */
+    private analyzeDirectory(
+        dirPath: string, 
+        fileList: {path: string, size: number, type: string}[], 
+        maxDepth: number = 3,
+        currentDepth: number = 0
+    ): void {
+        if (currentDepth > maxDepth) {
+            return;
+        }
+        
+        try {
+            const entries = fs.readdirSync(dirPath);
+            
+            for (const entry of entries) {
+                // Skip hidden files and directories
+                if (entry.startsWith('.')) {
+                    continue;
+                }
+                
+                const fullPath = path.join(dirPath, entry);
+                
+                try {
+                    const stats = fs.statSync(fullPath);
+                    
+                    if (stats.isDirectory()) {
+                        // Recursively analyze subdirectories
+                        this.analyzeDirectory(fullPath, fileList, maxDepth, currentDepth + 1);
+                    } else if (stats.isFile()) {
+                        // Skip files that are too large or binary
+                        if (stats.size > 100 * 1024) {
+                            continue;
+                        }
+                        
+                        // Skip files with certain extensions
+                        const ext = path.extname(fullPath).toLowerCase();
+                        const skipExtensions = ['.exe', '.dll', '.obj', '.bin', '.jpg', '.png', '.gif', '.mp3', '.mp4', '.zip', '.rar'];
+                        if (skipExtensions.includes(ext)) {
+                            continue;
+                        }
+                        
+                        // Add file info to the list
+                        fileList.push({
+                            path: fullPath,
+                            size: stats.size,
+                            type: ext
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error analyzing ${fullPath}:`, error);
+                }
+            }
+        } catch (error) {
+            console.error(`Error reading directory ${dirPath}:`, error);
         }
     }
     
