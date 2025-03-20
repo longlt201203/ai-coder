@@ -397,66 +397,21 @@ export class ContextManager {
         }
     }
 
-    /**
-     * Add an item to the selected context with pre-analysis for folders
-     */
-    async addToSelectedContext(itemPath: string): Promise<void> {
-        // First validate that the path exists before trying to add it
+    addToSelectedContext(itemPath: string): void {
+        // Check if the item exists
         if (!fs.existsSync(itemPath)) {
-            console.error(`Cannot add non-existent path to context: ${itemPath}`);
-            vscode.window.showErrorMessage(`Cannot add non-existent path to context: ${itemPath}`);
+            console.warn(`Cannot add non-existent item to context: ${itemPath}`);
             return;
         }
-    
-        // Normalize the path to ensure consistent handling
-        const normalizedPath = path.normalize(itemPath);
         
-        if (!this.selectedContextItems.includes(normalizedPath)) {
-            // Check if it's a directory and pre-analyze it
-            try {
-                const stats = fs.statSync(normalizedPath);
-                
-                if (stats.isDirectory()) {
-                    console.log(`Pre-analyzing directory: ${normalizedPath}`);
-                    
-                    try {
-                        // Create a metadata file in memory first, don't write to the directory
-                        // Analyze the directory structure and files
-                        const fileList: {path: string, size: number, type: string, relevanceScore?: number}[] = [];
-                        this.analyzeDirectory(normalizedPath, fileList);
-                        
-                        // Store metadata about the directory
-                        const metadata: DirectoryMetadata = {
-                            lastAnalyzed: new Date().toISOString(),
-                            fileCount: fileList.length,
-                            files: fileList
-                        };
-                        
-                        // Store metadata in extension storage instead of writing to the directory
-                        const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(normalizedPath)}`;
-                        await this.context.globalState.update(metadataKey, metadata);
-                        console.log(`Directory analysis complete: ${fileList.length} files found`);
-                        
-                        // Show success message to user
-                        vscode.window.showInformationMessage(
-                            `Added to context: ${path.basename(normalizedPath)} (${fileList.length} files analyzed)`
-                        );
-                    } catch (analyzeError) {
-                        console.error(`Error analyzing directory ${normalizedPath}:`, analyzeError);
-                        // Continue adding the directory even if analysis fails
-                    }
-                }
-            } catch (error) {
-                console.error(`Error pre-analyzing context item ${normalizedPath}:`, error);
-                vscode.window.showErrorMessage(`Error adding item to context: ${error instanceof Error ? error.message : String(error)}`);
-                return;
-            }
+        // Check if the item is already in the context
+        if (!this.selectedContextItems.includes(itemPath)) {
+            this.selectedContextItems.push(itemPath);
             
-            // Add to selected context
-            this.selectedContextItems.push(normalizedPath);
+            // Save the updated context
+            this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
             
-            // Persist selected context
-            await this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
+            console.log(`Added to context: ${itemPath}`);
         }
     }
 
@@ -716,6 +671,21 @@ export class ContextManager {
      * Get the list of selected context items
      */
     getSelectedContextItems(): string[] {
+        // Filter out any items that no longer exist
+        const validItems = this.selectedContextItems.filter(item => {
+            const exists = fs.existsSync(item);
+            if (!exists) {
+                console.warn(`Removing non-existent context item: ${item}`);
+            }
+            return exists;
+        });
+        
+        // Update if any items were removed
+        if (validItems.length !== this.selectedContextItems.length) {
+            this.selectedContextItems = validItems;
+            this.context.globalState.update('ai-coder.selectedContext', validItems);
+        }
+        
         return [...this.selectedContextItems];
     }
     

@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import { ContextManager } from "../context/contextManager";
 import Anthropic from "@anthropic-ai/sdk";
-import { MessageParam, ToolUnion } from "@anthropic-ai/sdk/resources/index.mjs";
+import {
+  MessageParam,
+  Model,
+  ToolUnion,
+} from "@anthropic-ai/sdk/resources/index.mjs";
 import * as fs from "fs";
 import * as path from "path";
 import { Stream } from "@anthropic-ai/sdk/streaming.mjs";
@@ -48,6 +52,7 @@ class AnthropicProvider implements AIProvider {
   private fileModificationHandler: FileModificationHandler | undefined;
   private readonly MAX_TOKENS_PER_REQUEST = 100000; // Adjust based on Claude's limits
   private readonly MAX_FILES_PER_BATCH = 10; // Maximum number of files to include in a batch
+  private readonly AI_MODEL: Model = "claude-3-5-sonnet-20241022";
 
   constructor(
     context: vscode.ExtensionContext,
@@ -106,9 +111,80 @@ class AnthropicProvider implements AIProvider {
     }
   }
 
+  private async processRequestWithContext(
+    prompt: string,
+    contextItems: (string | ContextItem)[],
+    onPartialResponse?: (text: string) => void
+  ): Promise<string> {
+    // Prepare context text from the context items
+    const contextText = this.prepareContextText(contextItems);
+
+    // Prepare messages with context
+    const messages = this.prepareMessages(contextText, prompt);
+    const tools = this.prepareTools();
+
+    try {
+      // Call Anthropic API with streaming and tools
+      const stream = await this.anthropic!.messages.create({
+        model: this.AI_MODEL,
+        max_tokens: 4000,
+        messages: messages,
+        temperature: 0.7,
+        tools: tools,
+        stream: true,
+      });
+
+      // Process the stream and handle tool uses
+      return await this.processResponseStream(stream, onPartialResponse);
+    } catch (error) {
+      console.error("Error in processRequestWithContext:", error);
+
+      // Handle rate limiting and overloaded errors
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (
+          errorMessage.includes("overloaded") ||
+          errorMessage.includes("rate limit") ||
+          (error as any)?.status === 429
+        ) {
+          // Notify the user about the error
+          if (onPartialResponse) {
+            onPartialResponse(
+              "\n\nThe AI service is currently overloaded. Waiting to retry...\n\n"
+            );
+          }
+
+          // Wait for 3 seconds before retrying
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+
+          // Retry the request with reduced context if possible
+          if (contextItems.length > 1) {
+            // Try with half the context items
+            const reducedContext = contextItems.slice(
+              0,
+              Math.ceil(contextItems.length / 2)
+            );
+            if (onPartialResponse) {
+              onPartialResponse("Retrying with reduced context...\n\n");
+            }
+            return this.processRequestWithContext(
+              prompt,
+              reducedContext,
+              onPartialResponse
+            );
+          }
+        }
+      }
+
+      // If we can't handle the error, rethrow it
+      throw error;
+    }
+  }
+
   /**
    * Process the request in batches to handle large context
    */
+  // Update the processBatchedRequest method to better handle context items
   private async processBatchedRequest(
     prompt: string,
     contextItems?: (string | ContextItem)[],
@@ -118,6 +194,9 @@ class AnthropicProvider implements AIProvider {
     if (!contextItems || contextItems.length === 0) {
       return this.processSimpleRequest(prompt, onPartialResponse);
     }
+
+    // Add the user message to history before processing
+    this.contextManager.addToHistory("user", prompt);
 
     // Sort context items by relevance (prioritize current file and user-selected items)
     const sortedItems = this.sortContextItemsByRelevance(contextItems);
@@ -146,9 +225,9 @@ class AnthropicProvider implements AIProvider {
 
     // Process each batch and collect responses
     let fullResponse = "";
-    
+
     // Create a wrapper for onPartialResponse that we can use for all batches
-    const batchPartialResponseHandler = onPartialResponse 
+    const batchPartialResponseHandler = onPartialResponse
       ? (text: string) => {
           if (onPartialResponse) {
             onPartialResponse(text);
@@ -158,49 +237,18 @@ class AnthropicProvider implements AIProvider {
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      const batchContextText = this.prepareContextText(batch);
 
-      // For the first batch, use the original prompt
-      // For subsequent batches, modify the prompt to continue analysis
-      const batchPrompt =
-        i === 0
-          ? prompt
-          : `Continue analyzing the code based on these additional files. ${prompt}`;
-
-      const messages = this.prepareMessages(batchContextText, batchPrompt);
-      const tools = this.prepareTools();
-
-      // Call Anthropic API with streaming and tools
-      const stream = await this.anthropic!.messages.create({
-        model: "claude-3-5-sonnet-latest",
-        max_tokens: 4000,
-        messages: messages,
-        temperature: 0.7,
-        tools: tools,
-        stream: true,
-      });
-
-      // Process the stream and handle tool uses
-      const batchResponse = await this.processResponseStream(
-        stream,
-        batchPartialResponseHandler // Use the same handler for all batches
+      // Process this batch
+      const batchResponse = await this.processRequestWithContext(
+        prompt,
+        batch,
+        batchPartialResponseHandler
       );
 
-      // For subsequent batches, add a separator
-      if (i > 0) {
-        fullResponse += "\n\n--- Additional Analysis ---\n\n";
-      }
-
+      // Add to the full response
       fullResponse += batchResponse;
-
-      // If this is not the last batch, add a small delay to avoid rate limiting
-      if (i < batches.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
     }
 
-    // Signal completion only after all batches are processed
-    console.log("All batches processed, returning full response");
     return fullResponse;
   }
 
@@ -216,7 +264,7 @@ class AnthropicProvider implements AIProvider {
 
     // Call Anthropic API with streaming and tools
     const stream = await this.anthropic!.messages.create({
-      model: "claude-3-5-sonnet-latest",
+      model: this.AI_MODEL,
       max_tokens: 4000,
       messages: messages,
       temperature: 0.7,
@@ -501,7 +549,9 @@ class AnthropicProvider implements AIProvider {
           break;
         }
         case "message_stop": {
-          console.log("End of message block - continuing to process any remaining chunks");
+          console.log(
+            "End of message block - continuing to process any remaining chunks"
+          );
           // We'll continue processing any remaining chunks
           break;
         }
