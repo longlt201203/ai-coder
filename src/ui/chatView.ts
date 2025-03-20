@@ -375,10 +375,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             // Get context for the query
             const contextItems = await this._contextManager.getRelevantContext(message);
             
-            // Send message to AI provider
+            // Create a message ID for this response
+            const messageId = `msg-${Date.now()}`;
+            
+            // Initialize an empty AI message
+            targetWebview.postMessage({
+                type: 'startAIMessage',
+                messageId: messageId
+            });
+            
+            // Define a callback for handling partial responses
+            const onPartialResponse = (text: string) => {
+                targetWebview.postMessage({
+                    type: 'appendToAIMessage',
+                    content: text,
+                    messageId: messageId
+                });
+            };
+            
+            // Send message to AI provider with streaming callback
             console.log('Sending message to AI provider with context items:', contextItems.length);
-            const response = await this._aiProvider.generateResponse(message, contextItems);
-            console.log('Received response from AI provider');
+            const response = await this._aiProvider.generateResponse(message, contextItems, onPartialResponse);
+            console.log('Received complete response from AI provider');
             
             // Hide typing indicator
             targetWebview.postMessage({
@@ -386,12 +404,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                 isTyping: false
             });
             
-            // Add AI response to UI
-            console.log('Sending AI response to webview');
+            // Finalize the AI message
             targetWebview.postMessage({
-                type: 'addMessage',
-                content: response,
-                role: 'assistant'
+                type: 'finalizeAIMessage',
+                messageId: messageId
             });
             
             // Add to context manager history

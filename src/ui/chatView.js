@@ -96,25 +96,25 @@ function updateContextItems(items) {
     // Create a Set to track unique paths and avoid duplicates
     const uniquePaths = new Set();
     let html = '';
-    
+
     for (const item of items) {
         // Skip if we've already added this path
         if (uniquePaths.has(item.path)) {
             continue;
         }
-        
+
         uniquePaths.add(item.path);
-        
+
         let iconClass = '';
-        
+
         if (item.isDirectory) {
             iconClass = 'fa-solid fa-folder';
         } else {
             // Get file extension
             const extension = item.name.split('.').pop().toLowerCase();
-            
+
             // Use the same simplified approach as in updateFileList
-            switch(extension) {
+            switch (extension) {
                 case 'js':
                     iconClass = 'fa-brands fa-js';
                     break;
@@ -176,28 +176,28 @@ function updateContextItems(items) {
 // Update the file list in the UI
 function updateFileList(items) {
     fileListElement.innerHTML = '';
-    
+
     items.forEach(item => {
         const fileItem = document.createElement('div');
         fileItem.className = 'file-item';
         fileItem.dataset.path = item.path;
         fileItem.dataset.isDirectory = item.isDirectory;
-        
+
         if (selectedItems.has(item.path)) {
             fileItem.classList.add('selected');
         }
-        
+
         const icon = document.createElement('span');
-        
+
         // Set appropriate icon based on file type
         if (item.isDirectory) {
             icon.className = 'file-item-icon fa-solid fa-folder';
         } else {
             // Get file extension
             const extension = item.name.split('.').pop().toLowerCase();
-            
+
             // Use a simpler approach with fewer icon types but more reliable
-            switch(extension) {
+            switch (extension) {
                 case 'js':
                     icon.className = 'file-item-icon fa-brands fa-js';
                     break;
@@ -229,13 +229,13 @@ function updateFileList(items) {
                     icon.className = 'file-item-icon fa-solid fa-file';
             }
         }
-        
+
         const name = document.createElement('span');
         name.textContent = item.name;
-        
+
         fileItem.appendChild(icon);
         fileItem.appendChild(name);
-        
+
         // Add click handler
         fileItem.addEventListener('click', (e) => {
             if (item.isDirectory && e.detail === 2) {
@@ -253,7 +253,7 @@ function updateFileList(items) {
                 updateSelectedItemsCount();
             }
         });
-        
+
         fileListElement.appendChild(fileItem);
     });
 }
@@ -300,11 +300,11 @@ function showFileBrowser() {
     // Clear any previously selected items
     selectedItems.clear();
     updateSelectedItemsCount();
-    
+
     // Show the dialog and overlay
     fileBrowserDialog.classList.add('active');
     modalOverlay.classList.add('active');
-    
+
     // Request initial directory listing (workspace root)
     vscode.postMessage({
         type: 'fileBrowser',
@@ -359,14 +359,14 @@ cancelSelectBtn.addEventListener('click', hideFileBrowser);
 confirmSelectBtn.addEventListener('click', () => {
     // Convert Set to Array for sending
     const selectedPaths = Array.from(selectedItems);
-    
+
     // Send selected paths to extension
     vscode.postMessage({
         type: 'contextAction',
         action: 'addCustom',
         paths: selectedPaths
     });
-    
+
     // Hide the dialog
     hideFileBrowser();
 });
@@ -378,17 +378,17 @@ modalOverlay.addEventListener('click', hideFileBrowser);
 function selectAllItems() {
     // Get all file items in the current directory
     const fileItems = document.querySelectorAll('.file-item');
-    
+
     fileItems.forEach(item => {
         const path = item.dataset.path;
-        
+
         // Add to selected items set
         selectedItems.add(path);
-        
+
         // Add selected class
         item.classList.add('selected');
     });
-    
+
     // Update the count
     updateSelectedItemsCount();
 }
@@ -396,26 +396,26 @@ function selectAllItems() {
 // Update the file list in the UI
 function updateFileList(items) {
     fileListElement.innerHTML = '';
-    
+
     items.forEach(item => {
         const fileItem = document.createElement('div');
         fileItem.className = 'file-item';
         fileItem.dataset.path = item.path;
         fileItem.dataset.isDirectory = item.isDirectory;
-        
+
         if (selectedItems.has(item.path)) {
             fileItem.classList.add('selected');
         }
-        
+
         const icon = document.createElement('span');
         icon.className = `file-item-icon codicon ${item.isDirectory ? 'codicon-folder' : 'codicon-file'}`;
-        
+
         const name = document.createElement('span');
         name.textContent = item.name;
-        
+
         fileItem.appendChild(icon);
         fileItem.appendChild(name);
-        
+
         // Add click handler
         fileItem.addEventListener('click', (e) => {
             if (item.isDirectory && e.detail === 2) {
@@ -433,7 +433,7 @@ function updateFileList(items) {
                 updateSelectedItemsCount();
             }
         });
-        
+
         fileListElement.appendChild(fileItem);
     });
 }
@@ -443,13 +443,13 @@ confirmSelectBtn.addEventListener('click', () => {
     if (selectedItems.size > 0) {
         const selectedPaths = Array.from(selectedItems);
         console.log('Sending selected paths to extension:', selectedPaths);
-        
+
         vscode.postMessage({
             type: 'contextAction',
             action: 'addCustom',
             paths: selectedPaths
         });
-        
+
         // Hide the file browser dialog
         hideFileBrowser();
     }
@@ -467,14 +467,14 @@ function showFileBrowser() {
     // Reset state
     selectedItems.clear();
     updateSelectedItemsCount();
-    
+
     // Request initial directory listing from extension
     vscode.postMessage({
         type: 'fileBrowser',
         action: 'listDirectory',
         path: '' // Empty path means get workspace root
     });
-    
+
     // Show dialog and overlay
     fileBrowserDialog.style.display = 'flex';
     modalOverlay.style.display = 'block';
@@ -490,11 +490,11 @@ function hideFileBrowser() {
 function navigateToDirectory(path) {
     currentPath = path;
     currentPathElement.textContent = path;
-    
+
     // Clear selection when navigating
     selectedItems.clear();
     updateSelectedItemsCount();
-    
+
     // Request directory listing from extension
     vscode.postMessage({
         type: 'fileBrowser',
@@ -506,7 +506,7 @@ function navigateToDirectory(path) {
 // Navigate up one directory
 function navigateUp() {
     if (!currentPath) return;
-    
+
     const parentPath = currentPath.split('\\').slice(0, -1).join('\\');
     navigateToDirectory(parentPath || '');
 }
@@ -515,7 +515,7 @@ function navigateUp() {
 window.addEventListener('message', event => {
     const message = event.data;
     console.log('Received message from extension:', message);
-    
+
     switch (message.type) {
         case 'updateContext':
             updateContextItems(message.contextItems);
@@ -532,6 +532,47 @@ window.addEventListener('message', event => {
             updateFileList(message.items);
             currentPathElement.textContent = message.currentPath;
             break;
+        case 'startAIMessage':
+            // Create a new message element with the given ID
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.id = message.messageId;
+            aiMessageDiv.className = 'message assistant-message';
+            aiMessageDiv.innerHTML = ''; // Start empty
+            messagesContainer.appendChild(aiMessageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            break;
+
+        case 'appendToAIMessage':
+            const currentAiMessage = document.getElementById(message.messageId);
+            if (currentAiMessage) {
+                // We need to maintain the full markdown text to render it properly
+                
+                // If this is the first chunk, initialize the data attribute
+                if (!currentAiMessage.hasAttribute('data-markdown-content')) {
+                    currentAiMessage.setAttribute('data-markdown-content', '');
+                }
+                
+                // Append the new chunk to our stored markdown content
+                const currentMarkdown = currentAiMessage.getAttribute('data-markdown-content');
+                const updatedMarkdown = currentMarkdown + message.content;
+                currentAiMessage.setAttribute('data-markdown-content', updatedMarkdown);
+                
+                // Render the complete markdown content
+                currentAiMessage.innerHTML = formatText(updatedMarkdown);
+                
+                // Scroll to the bottom
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            break;
+
+        case 'finalizeAIMessage':
+            // Any final processing for the message (if needed)
+            const finalMessage = document.getElementById(message.messageId);
+            if (finalMessage) {
+                // Add any final classes or processing
+                finalMessage.classList.add('complete');
+            }
+            break;
     }
 });
 
@@ -539,10 +580,10 @@ window.addEventListener('message', event => {
 function addMessage(content, role) {
     console.log(`Adding ${role} message to chat`);
     const messageElement = document.createElement('div');
-    
+
     // Fix the class name to match both 'user' and 'assistant' roles
     messageElement.className = `message ${role}-message`;
-    
+
     if (role === 'assistant' || role === 'ai') {
         // Handle both 'assistant' and 'ai' role names
         messageElement.innerHTML = formatText(content);
@@ -550,7 +591,7 @@ function addMessage(content, role) {
         // For user messages, just use text content with pre-wrap
         messageElement.textContent = content;
     }
-    
+
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -562,7 +603,7 @@ function setTypingIndicator(isTyping) {
     if (existingIndicator) {
         existingIndicator.remove();
     }
-    
+
     if (isTyping) {
         const typingIndicator = document.createElement('div');
         typingIndicator.className = 'typing-indicator';
