@@ -1,61 +1,50 @@
 {
   "name": "ai-coder",
-  "displayName": "ai-coder",
-  "description": "AI-powered coding assistant with context-aware chat",
-  "version": "0.0.1",
+  "displayName": "AI Coder",
+  "description": "AI-powered coding assistant using Claude API",
+  "version": "0.1.0",
+  "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Programming Languages",
+    "Machine Learning",
+    "Snippets"
   ],
+  "keywords": [
+    "ai",
+    "claude",
+    "coding assistant",
+    "code generation",
+    "anthropic"
+  ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/longlt201203/ai-coder"
+  },
+  "homepage": "https://github.com/longlt201203/ai-coder/blob/main/README.md",
+  "bugs": {
+    "url": "https://github.com/longlt201203/ai-coder/issues"
+  },
+  "license": "MIT",
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ai-coder.helloWorld",
-        "title": "Hello World"
-      },
-      {
         "command": "ai-coder.configureApiKey",
         "title": "AI Coder: Configure Anthropic API Key"
       },
       {
-        "command": "ai-coder.directConfigureApiKey",
-        "title": "AI Coder: Direct Configure API Key"
-      },
-      {
         "command": "ai-coder.openChat",
         "title": "AI Coder: Open Chat"
-      },
-      {
-        "command": "ai-coder.explainCode",
-        "title": "AI Coder: Explain Selected Code"
-      },
-      {
-        "command": "ai-coder.generateCode",
-        "title": "AI Coder: Generate Code"
-      },
-      {
-        "command": "ai-coder.optimizeCode",
-        "title": "AI Coder: Optimize Selected Code"
-      },
-      {
-        "command": "ai-coder.addFileToContext",
-        "title": "AI Coder: Add File to Context"
-      },
-      {
-        "command": "ai-coder.addFolderToContext",
-        "title": "AI Coder: Add Folder to Context"
-      },
-      {
-        "command": "ai-coder.clearContext",
-        "title": "AI Coder: Clear Context"
-      },
-      {
-        "command": "ai-coder.showContext",
-        "title": "AI Coder: Show Current Context"
       }
     ],
     "keybindings": [
@@ -64,11 +53,6 @@
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "ai-coder.helloWorld",
-        "key": "ctrl+shift+h",
-        "mac": "cmd+shift+h"
       }
     ],
     "viewsContainers": {
@@ -86,41 +70,6 @@
           "id": "ai-coder.chatView",
           "name": "AI Chat",
           "type": "webview"
-        },
-        {
-          "id": "ai-coder.contextView",
-          "name": "Context Files"
-        }
-      ]
-    },
-    "menus": {
-      "editor/context": [
-        {
-          "command": "ai-coder.explainCode",
-          "when": "editorHasSelection",
-          "group": "ai-coder"
-        },
-        {
-          "command": "ai-coder.optimizeCode",
-          "when": "editorHasSelection",
-          "group": "ai-coder"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "ai-coder.addFileToContext",
-          "when": "view == ai-coder.contextView",
-          "group": "navigation"
-        },
-        {
-          "command": "ai-coder.addFolderToContext",
-          "when": "view == ai-coder.contextView",
-          "group": "navigation"
-        },
-        {
-          "command": "ai-coder.clearContext",
-          "when": "view == ai-coder.contextView",
-          "group": "navigation"
         }
       ]
     }
@@ -131,7 +80,9 @@
     "watch": "tsc -watch -p ./",
     "pretest": "yarn run compile && yarn run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -141,11 +92,13 @@
     "@typescript-eslint/parser": "^8.25.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^2.24.0",
     "eslint": "^9.21.0",
     "typescript": "^5.7.3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "gpt-tokenizer": "^2.9.0"
   }
 }

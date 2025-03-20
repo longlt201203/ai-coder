@@ -178,11 +178,51 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             const currentFileContext = lastActiveEditor ? this._getFileContextFromEditor(lastActiveEditor) : null;
             console.log('Current file context:', currentFileContext ? currentFileContext.metadata?.fileName : 'none'); 
             
+            // Check if this is a folder analysis request
+            const folderAnalysisMatch = message.match(/analyze\s+(?:the\s+)?(?:folder|directory)\s+['"]?([^'"]+)['"]?/i);
+            let specificFolderContext: ContextItem | null = null;
+            
+            if (folderAnalysisMatch && folderAnalysisMatch[1]) {
+                const folderName = folderAnalysisMatch[1].trim();
+                console.log(`Detected folder analysis request for: ${folderName}`);
+                
+                // Try to find the folder in the workspace
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders) {
+                    for (const wsFolder of workspaceFolders) {
+                        const potentialPath = path.join(wsFolder.uri.fsPath, folderName);
+                        if (fs.existsSync(potentialPath) && fs.statSync(potentialPath).isDirectory()) {
+                            // Add this specific folder to the context manager temporarily
+                            this._contextManager.addToSelectedContext(potentialPath);
+                            
+                            // Create a context item for this folder
+                            const dirStructure = await this._contextManager.getDirectoryStructure(potentialPath);
+                            specificFolderContext = {
+                                type: 'text',
+                                content: dirStructure,
+                                metadata: {
+                                    fileName: folderName,
+                                    path: potentialPath
+                                }
+                            };
+                            
+                            console.log(`Added specific folder to context: ${potentialPath}`);
+                            break;
+                        }
+                    }
+                }
+            }
+            
             // Get relevant context from the context manager
             const contextItems = await this._contextManager.getRelevantContext(message);
             
             // Create a new array with the current file context if available
             const allContextItems: (string | ContextItem)[] = [...contextItems];
+            
+            // Add specific folder context if available (with highest priority)
+            if (specificFolderContext) {
+                allContextItems.unshift(specificFolderContext);
+            }
             
             // Add current file context if available
             if (currentFileContext) {
@@ -205,29 +245,48 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             // Variable to collect the full response
             let fullResponse = '';
             
-            // Generate AI response with streaming
-            await this._aiProvider.generateResponse(
-                message, 
-                allContextItems,
-                (partialText) => {
-                    // Send each chunk to the webview
-                    targetWebview.postMessage({
-                        type: 'appendToAIMessage',
-                        message: partialText
-                    });
-                    
-                    // Collect the full response
-                    fullResponse += partialText;
-                }
-            ).then(response => {
+            try {
+                // Generate AI response with streaming
+                const response = await this._aiProvider.generateResponse(
+                    message, 
+                    allContextItems,
+                    (partialText) => {
+                        // Send each chunk to the webview
+                        targetWebview.postMessage({
+                            type: 'appendToAIMessage',
+                            message: partialText
+                        });
+                        
+                        // Collect the full response
+                        fullResponse += partialText;
+                    }
+                );
+                
                 // Add the AI response to history
                 this._contextManager.addToHistory('assistant', fullResponse || response);
                 
-                // Mark the message as complete
+                // Mark the message as complete ONLY after the entire response is received
                 targetWebview.postMessage({
                     type: 'completeAIMessage'
                 });
-            });
+            } catch (error) {
+                console.error('Error generating AI response:', error);
+                
+                // If we have a partial response, still complete it
+                if (fullResponse) {
+                    this._contextManager.addToHistory('assistant', fullResponse);
+                    targetWebview.postMessage({
+                        type: 'completeAIMessage'
+                    });
+                } else {
+                    // Show error message if no response was generated
+                    targetWebview.postMessage({
+                        type: 'addMessage',
+                        message: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                        sender: 'system'
+                    });
+                }
+            }
         } catch (error) {
             console.error('Error handling user message:', error);
             

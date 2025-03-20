@@ -32,6 +32,7 @@
             overflow-x: auto;
             margin: 8px 0;
             border: 1px solid var(--vscode-panel-border);
+            position: relative;
         }
         
         .ai-message pre code {
@@ -40,59 +41,114 @@
             border-radius: 0;
             font-family: var(--vscode-editor-font-family);
             font-size: 0.9em;
+            display: block;
+            line-height: 1.5;
         }
         
-        .ai-message h1, .ai-message h2, .ai-message h3, 
-        .ai-message h4, .ai-message h5, .ai-message h6 {
-            margin-top: 16px;
-            margin-bottom: 8px;
-            color: var(--vscode-foreground);
-            font-weight: 600;
+        /* Add copy button to code blocks */
+        .ai-message pre:hover .copy-code-button {
+            opacity: 1;
         }
         
-        .ai-message h1 { font-size: 1.5em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 4px; }
-        .ai-message h2 { font-size: 1.3em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 4px; }
-        .ai-message h3 { font-size: 1.2em; }
-        .ai-message h4 { font-size: 1.1em; }
+        .copy-code-button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            padding: 3px 6px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 3px;
+            font-size: 0.8em;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
         
+        /* Improved table styling */
+        .ai-message table {
+            border-collapse: collapse;
+            margin: 12px 0;
+            width: 100%;
+            font-size: 0.9em;
+        }
+        
+        .ai-message th {
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            font-weight: bold;
+            text-align: left;
+            padding: 8px;
+            border: 1px solid var(--vscode-panel-border);
+        }
+        
+        .ai-message td {
+            padding: 8px;
+            border: 1px solid var(--vscode-panel-border);
+        }
+        
+        .ai-message tr:nth-child(even) {
+            background-color: var(--vscode-editor-inactiveSelectionBackground);
+        }
+        
+        /* Enhanced list styling */
         .ai-message ul, .ai-message ol {
-            padding-left: 24px;
+            padding-left: 20px;
             margin: 8px 0;
         }
         
         .ai-message li {
             margin-bottom: 4px;
-        }
-        
-        .ai-message p {
-            margin: 8px 0;
             line-height: 1.5;
         }
         
+        /* Blockquote styling */
         .ai-message blockquote {
             border-left: 3px solid var(--vscode-activityBarBadge-background);
             margin: 8px 0;
-            padding-left: 12px;
+            padding: 4px 12px;
             color: var(--vscode-descriptionForeground);
+            background-color: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 0 3px 3px 0;
         }
         
-        .ai-message table {
-            border-collapse: collapse;
-            margin: 12px 0;
-            width: 100%;
-        }
-        
-        .ai-message th, .ai-message td {
-            border: 1px solid var(--vscode-panel-border);
-            padding: 6px 8px;
-            text-align: left;
-        }
-        
-        .ai-message th {
-            background-color: var(--vscode-editor-lineHighlightBackground);
+        /* Heading styles */
+        .ai-message h1, .ai-message h2, .ai-message h3, 
+        .ai-message h4, .ai-message h5, .ai-message h6 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: var(--vscode-editor-foreground);
             font-weight: 600;
         }
         
+        .ai-message h1 {
+            font-size: 1.6em;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 4px;
+        }
+        
+        .ai-message h2 {
+            font-size: 1.4em;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 4px;
+        }
+        
+        .ai-message h3 {
+            font-size: 1.2em;
+        }
+        
+        .ai-message h4 {
+            font-size: 1.1em;
+        }
+        
+        /* Horizontal rule */
+        .ai-message hr {
+            border: none;
+            border-top: 1px solid var(--vscode-panel-border);
+            margin: 16px 0;
+        }
+        
+        /* Link styling */
         .ai-message a {
             color: var(--vscode-textLink-foreground);
             text-decoration: none;
@@ -103,18 +159,19 @@
             color: var(--vscode-textLink-activeForeground);
         }
         
-        .ai-message hr {
-            border: none;
-            border-top: 1px solid var(--vscode-panel-border);
-            margin: 16px 0;
-        }
-        
+        /* Image styling */
         .ai-message img {
             max-width: 100%;
+            border-radius: 4px;
             margin: 8px 0;
         }
         
-        /* Language-specific syntax highlighting classes */
+        /* Inline code file path styling */
+        .ai-message code.filepath {
+            color: var(--vscode-symbolIcon-fileForeground);
+        }
+        
+        /* Syntax highlighting for different languages */
         .ai-message .language-js, .ai-message .language-javascript,
         .ai-message .language-ts, .ai-message .language-typescript,
         .ai-message .language-html, .ai-message .language-css,
@@ -297,10 +354,54 @@
                 gfm: true,           // Use GitHub Flavored Markdown
                 headerIds: false,    // Don't add IDs to headers
                 langPrefix: 'language-', // CSS language prefix for code blocks
+                highlight: function(code, lang) {
+                    // You could add a syntax highlighter here in the future
+                    return code;
+                }
             });
             
             // Process the text with marked
-            return marked.parse(text);
+            const html = marked.parse(text);
+            
+            // Add copy buttons to code blocks
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            // Find all pre elements and add copy buttons
+            const preElements = tempDiv.querySelectorAll('pre');
+            preElements.forEach(pre => {
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-code-button';
+                copyButton.textContent = 'Copy';
+                copyButton.addEventListener('click', function() {
+                    const code = pre.querySelector('code').innerText;
+                    navigator.clipboard.writeText(code).then(() => {
+                        copyButton.textContent = 'Copied!';
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy: ', err);
+                    });
+                });
+                pre.appendChild(copyButton);
+            });
+            
+            // Special handling for file paths
+            const codeElements = tempDiv.querySelectorAll('code');
+            codeElements.forEach(code => {
+                // If this is not inside a pre (it's an inline code)
+                if (!code.parentElement.matches('pre')) {
+                    const text = code.innerText;
+                    // Check if it looks like a file path
+                    if (text.match(/\.(js|ts|py|html|css|json|md|cpp|h|cs|java|go|rb|php)$/i) || 
+                        text.includes('/') || text.includes('\\')) {
+                        code.classList.add('filepath');
+                    }
+                }
+            });
+            
+            return tempDiv.innerHTML;
         }
         
         // Handle context item updates from extension
@@ -393,6 +494,7 @@
                     aiMessageDiv.id = 'current-ai-message';
                     aiMessageDiv.classList.add('message');
                     aiMessageDiv.classList.add('ai-message');
+                    aiMessageDiv.setAttribute('data-raw-content', '');
                     messagesContainer.appendChild(aiMessageDiv);
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     break;
@@ -409,9 +511,10 @@
                         // Store the updated raw content
                         currentAiMessage.setAttribute('data-raw-content', rawContent);
                         
-                        // Apply markdown formatting to the entire content
+                        // Apply enhanced markdown formatting to the entire content
                         currentAiMessage.innerHTML = formatText(rawContent);
                         
+                        // Scroll to the bottom
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     }
                     break;
@@ -419,7 +522,15 @@
                 case 'completeAIMessage':
                     const completedMessage = document.getElementById('current-ai-message');
                     if (completedMessage) {
+                        // Ensure any final formatting is applied
+                        const finalContent = completedMessage.getAttribute('data-raw-content') || '';
+                        completedMessage.innerHTML = formatText(finalContent);
+                        
+                        // Remove the ID to indicate it's complete
                         completedMessage.removeAttribute('id');
+                        
+                        // Scroll to the bottom one final time
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     }
                     break;
                     

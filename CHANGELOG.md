@@ -1,9 +1,13 @@
 # Change Log
 
-All notable changes to the "ai-coder" extension will be documented in this file.
+All notable changes to the "AI Coder" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.1.0] - 2024-11-XX
 
-## [Unreleased]
-
+### Added
 - Initial release
+- Chat interface with Claude AI integration
+- Context-aware code assistance
+- File and folder context management
+- Direct file modification capabilities
+- Support for multiple programming languages
