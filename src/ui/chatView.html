@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Coder Chat</title>
     <link rel="stylesheet" type="text/css" href="{{cssUri}}" />
+    <!-- Add Font Awesome with all icon sets -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
     <div class="chat-container">
@@ -19,11 +21,11 @@
             </div>
             <div class="context-actions">
                 <button class="context-button" id="addContextBtn">
-                    <span class="codicon codicon-add"></span>
+                    <span class="fa-solid fa-plus"></span>
                     Add Files/Folders
                 </button>
                 <button class="context-button secondary" id="clearContextBtn">
-                    <span class="codicon codicon-clear-all"></span>
+                    <span class="fa-solid fa-trash-can"></span>
                     Clear All
                 </button>
             </div>
@@ -47,10 +49,13 @@
         </div>
         <div class="file-browser-nav">
             <button id="upDirBtn" class="nav-button">
-                <span class="codicon codicon-arrow-up"></span> Up
+                <span class="fa-solid fa-arrow-up"></span> Up
             </button>
             <button id="homeBtn" class="nav-button">
-                <span class="codicon codicon-home"></span> Home
+                <span class="fa-solid fa-home"></span> Home
+            </button>
+            <button id="selectAllBtn" class="nav-button">
+                <span class="fa-solid fa-check-double"></span> Select All
             </button>
         </div>
         <div id="fileList" class="file-list"></div>

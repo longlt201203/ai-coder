@@ -33,8 +33,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
         
-        // Initialize context items
-        this._sendContextToWebview(webviewView.webview);
+        // Give the webview time to initialize before sending messages
+        setTimeout(() => {
+            // Initialize context items
+            this._sendContextToWebview(webviewView.webview);
+        }, 500);
         
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
@@ -73,8 +76,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         // Set the HTML content
         panel.webview.html = this._getHtmlForWebview(panel.webview);
         
-        // Initialize context items
-        this._sendContextToWebview(panel.webview);
+        // Give the webview time to initialize before sending messages
+        setTimeout(() => {
+            // Initialize context items
+            this._sendContextToWebview(panel.webview);
+        }, 500);
         
         // Handle messages from the webview
         panel.webview.onDidReceiveMessage(async (data) => {
@@ -101,6 +107,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
     }
     
     /**
+     * Check if the webview is responsive by sending a ping
+     */
+    private _checkWebviewResponsive(webview: vscode.Webview): void {
+        console.log('Checking if webview is responsive...');
+        webview.postMessage({
+            type: 'ping',
+            timestamp: Date.now()
+        });
+    }
+    
+    /**
      * Send the current context items to the webview
      */
     private _sendContextToWebview(webview?: vscode.Webview) {
@@ -111,6 +128,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         if (!targetWebview) {
             return;
         }
+        
+        // Check if webview is responsive
+        this._checkWebviewResponsive(targetWebview);
         
         const contextItems = this._contextManager.getSelectedContextItems();
         const formattedItems = contextItems.map(item => {
@@ -328,81 +348,69 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
      * Handle user message and generate AI response
      */
     private async _handleUserMessage(message: string, webview?: vscode.Webview) {
-        // Get the target webview
         const targetWebview = webview || 
-                             (this._panel ? this._panel.webview : undefined) || 
-                             (this._view ? this._view.webview : undefined);
+                     (this._panel ? this._panel.webview : undefined) || 
+                     (this._view ? this._view.webview : undefined);
         
         if (!targetWebview) {
             return;
         }
         
+        console.log('Handling user message:', message);
+        
         // Add user message to UI
         targetWebview.postMessage({
             type: 'addMessage',
-            message: message,
-            sender: 'user'
+            content: message,
+            role: 'user'
         });
-        
-        // Add to history
-        this._contextManager.addToHistory('user', message);
         
         // Show typing indicator
         targetWebview.postMessage({
-            type: 'showTyping'
+            type: 'typingIndicator',
+            isTyping: true
         });
         
         try {
-            // Get context items
-            const contextItems = await this._getContextForPrompt(message);
-            console.log('Current file context:', vscode.window.activeTextEditor?.document.fileName);
+            // Get context for the query
+            const contextItems = await this._contextManager.getRelevantContext(message);
             
-            if (vscode.window.activeTextEditor) {
-                console.log('Added current file context to items:', vscode.window.activeTextEditor.document.fileName);
-            }
-            
-            console.log('Created', contextItems.length, 'batches of context items');
-            console.log('Start of response');
-            
-            // Start AI message
-            targetWebview.postMessage({
-                type: 'startAIMessage'
-            });
-            
-            // Generate response with streaming
-            const response = await this._aiProvider.generateResponse(
-                message,
-                contextItems,
-                (partialResponse) => {
-                    targetWebview.postMessage({
-                        type: 'appendToAIMessage',
-                        message: partialResponse
-                    });
-                }
-            );
-            
-            // Complete AI message
-            targetWebview.postMessage({
-                type: 'completeAIMessage'
-            });
+            // Send message to AI provider
+            console.log('Sending message to AI provider with context items:', contextItems.length);
+            const response = await this._aiProvider.generateResponse(message, contextItems);
+            console.log('Received response from AI provider');
             
             // Hide typing indicator
             targetWebview.postMessage({
-                type: 'hideTyping'
+                type: 'typingIndicator',
+                isTyping: false
             });
+            
+            // Add AI response to UI
+            console.log('Sending AI response to webview');
+            targetWebview.postMessage({
+                type: 'addMessage',
+                content: response,
+                role: 'assistant'
+            });
+            
+            // Add to context manager history
+            this._contextManager.addToHistory('user', message);
+            this._contextManager.addToHistory('assistant', response);
         } catch (error) {
-            console.error('Error generating response:', error);
+            console.error('Error sending message to AI:', error);
             
             // Hide typing indicator
             targetWebview.postMessage({
-                type: 'hideTyping'
+                type: 'typingIndicator',
+                isTyping: false
             });
             
             // Show error message
             targetWebview.postMessage({
                 type: 'addMessage',
-                message: `Error: ${error instanceof Error ? error.message : String(error)}`,
-                sender: 'ai'
+                content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                role: 'assistant'
             });
         }
     }
@@ -550,6 +558,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         // Replace placeholders with actual URIs
         html = html.replace('{{cssUri}}', cssPath.toString());
         html = html.replace('{{jsUri}}', jsPath.toString());
+        
+        console.log('Generated HTML with JS path:', jsPath.toString());
         
         // Return the HTML content
         return html;

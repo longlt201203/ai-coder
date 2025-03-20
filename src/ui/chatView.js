@@ -104,14 +104,54 @@ function updateContextItems(items) {
         }
         
         uniquePaths.add(item.path);
-        const iconClass = item.isDirectory ? 'codicon-folder' : 'codicon-file';
-        const iconType = item.isDirectory ? 'folder' : 'file';
+        
+        let iconClass = '';
+        
+        if (item.isDirectory) {
+            iconClass = 'fa-solid fa-folder';
+        } else {
+            // Get file extension
+            const extension = item.name.split('.').pop().toLowerCase();
+            
+            // Use the same simplified approach as in updateFileList
+            switch(extension) {
+                case 'js':
+                    iconClass = 'fa-brands fa-js';
+                    break;
+                case 'ts':
+                    iconClass = 'fa-solid fa-code ts-file';
+                    break;
+                case 'html':
+                    iconClass = 'fa-brands fa-html5';
+                    break;
+                case 'css':
+                    iconClass = 'fa-brands fa-css3-alt';
+                    break;
+                case 'json':
+                    iconClass = 'fa-solid fa-brackets-curly';
+                    break;
+                case 'md':
+                    iconClass = 'fa-solid fa-file-lines md-file';
+                    break;
+                case 'py':
+                    iconClass = 'fa-brands fa-python';
+                    break;
+                case 'csv':
+                    iconClass = 'fa-solid fa-table csv-file';
+                    break;
+                case 'txt':
+                    iconClass = 'fa-solid fa-file-lines';
+                    break;
+                default:
+                    iconClass = 'fa-solid fa-file';
+            }
+        }
 
         html += `
             <div class="context-item" data-path="${item.path}">
-                <span class="context-item-icon ${iconType} codicon ${iconClass}"></span>
+                <span class="context-item-icon ${iconClass}"></span>
                 <span class="context-item-name" title="${item.path}">${item.name}</span>
-                <span class="context-item-remove codicon codicon-close" title="Remove from context"></span>
+                <span class="context-item-remove fa-solid fa-xmark" title="Remove from context"></span>
             </div>
         `;
     }
@@ -133,6 +173,91 @@ function updateContextItems(items) {
     });
 }
 
+// Update the file list in the UI
+function updateFileList(items) {
+    fileListElement.innerHTML = '';
+    
+    items.forEach(item => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.dataset.path = item.path;
+        fileItem.dataset.isDirectory = item.isDirectory;
+        
+        if (selectedItems.has(item.path)) {
+            fileItem.classList.add('selected');
+        }
+        
+        const icon = document.createElement('span');
+        
+        // Set appropriate icon based on file type
+        if (item.isDirectory) {
+            icon.className = 'file-item-icon fa-solid fa-folder';
+        } else {
+            // Get file extension
+            const extension = item.name.split('.').pop().toLowerCase();
+            
+            // Use a simpler approach with fewer icon types but more reliable
+            switch(extension) {
+                case 'js':
+                    icon.className = 'file-item-icon fa-brands fa-js';
+                    break;
+                case 'ts':
+                    icon.className = 'file-item-icon fa-solid fa-code ts-file';
+                    break;
+                case 'html':
+                    icon.className = 'file-item-icon fa-brands fa-html5';
+                    break;
+                case 'css':
+                    icon.className = 'file-item-icon fa-brands fa-css3-alt';
+                    break;
+                case 'json':
+                    icon.className = 'file-item-icon fa-solid fa-brackets-curly';
+                    break;
+                case 'md':
+                    icon.className = 'file-item-icon fa-solid fa-file-lines md-file';
+                    break;
+                case 'py':
+                    icon.className = 'file-item-icon fa-brands fa-python';
+                    break;
+                case 'csv':
+                    icon.className = 'file-item-icon fa-solid fa-table csv-file';
+                    break;
+                case 'txt':
+                    icon.className = 'file-item-icon fa-solid fa-file-lines';
+                    break;
+                default:
+                    icon.className = 'file-item-icon fa-solid fa-file';
+            }
+        }
+        
+        const name = document.createElement('span');
+        name.textContent = item.name;
+        
+        fileItem.appendChild(icon);
+        fileItem.appendChild(name);
+        
+        // Add click handler
+        fileItem.addEventListener('click', (e) => {
+            if (item.isDirectory && e.detail === 2) {
+                // Double click on directory - navigate into it
+                navigateToDirectory(item.path);
+            } else {
+                // Single click - select/deselect
+                if (selectedItems.has(item.path)) {
+                    selectedItems.delete(item.path);
+                    fileItem.classList.remove('selected');
+                } else {
+                    selectedItems.add(item.path);
+                    fileItem.classList.add('selected');
+                }
+                updateSelectedItemsCount();
+            }
+        });
+        
+        fileListElement.appendChild(fileItem);
+    });
+}
+
 // Add context button click handler
 addContextBtn.addEventListener('click', () => {
     // Show our custom file browser instead of sending a message to VS Code
@@ -149,7 +274,6 @@ clearContextBtn.addEventListener('click', () => {
 
 // File browser state
 let currentPath = '';
-let selectedItems = new Set();
 
 // File browser elements
 const fileBrowserDialog = document.getElementById('fileBrowserDialog');
@@ -158,6 +282,7 @@ const fileListElement = document.getElementById('fileList');
 const selectedItemsCountElement = document.getElementById('selectedItemsCount');
 const upDirBtn = document.getElementById('upDirBtn');
 const homeBtn = document.getElementById('homeBtn');
+const selectAllBtn = document.getElementById('selectAllBtn');
 const closeBrowserBtn = document.getElementById('closeBrowserBtn');
 const cancelSelectBtn = document.getElementById('cancelSelectBtn');
 const confirmSelectBtn = document.getElementById('confirmSelectBtn');
@@ -166,6 +291,57 @@ const confirmSelectBtn = document.getElementById('confirmSelectBtn');
 const modalOverlay = document.createElement('div');
 modalOverlay.className = 'modal-overlay';
 document.body.appendChild(modalOverlay);
+
+// Selected items set
+const selectedItems = new Set();
+
+// Show file browser
+function showFileBrowser() {
+    // Clear any previously selected items
+    selectedItems.clear();
+    updateSelectedItemsCount();
+    
+    // Show the dialog and overlay
+    fileBrowserDialog.classList.add('active');
+    modalOverlay.classList.add('active');
+    
+    // Request initial directory listing (workspace root)
+    vscode.postMessage({
+        type: 'fileBrowser',
+        action: 'listDirectory',
+        path: ''  // Empty path means get workspace root
+    });
+}
+
+// Hide file browser
+function hideFileBrowser() {
+    fileBrowserDialog.classList.remove('active');
+    modalOverlay.classList.remove('active');
+    selectedItems.clear();
+}
+
+// Update selected items count
+function updateSelectedItemsCount() {
+    selectedItemsCountElement.textContent = selectedItems.size.toString();
+}
+
+// Navigate to directory
+function navigateToDirectory(dirPath) {
+    vscode.postMessage({
+        type: 'fileBrowser',
+        action: 'listDirectory',
+        path: dirPath
+    });
+}
+
+// Navigate up one directory
+function navigateUp() {
+    const currentPath = currentPathElement.textContent;
+    if (currentPath) {
+        const parentPath = path.dirname(currentPath);
+        navigateToDirectory(parentPath);
+    }
+}
 
 // Add event listeners for file browser buttons
 upDirBtn.addEventListener('click', navigateUp);
@@ -177,8 +353,91 @@ homeBtn.addEventListener('click', () => {
         path: ''  // Empty path means get workspace root
     });
 });
+selectAllBtn.addEventListener('click', selectAllItems);
 closeBrowserBtn.addEventListener('click', hideFileBrowser);
 cancelSelectBtn.addEventListener('click', hideFileBrowser);
+confirmSelectBtn.addEventListener('click', () => {
+    // Convert Set to Array for sending
+    const selectedPaths = Array.from(selectedItems);
+    
+    // Send selected paths to extension
+    vscode.postMessage({
+        type: 'contextAction',
+        action: 'addCustom',
+        paths: selectedPaths
+    });
+    
+    // Hide the dialog
+    hideFileBrowser();
+});
+
+// Also close when clicking on the overlay
+modalOverlay.addEventListener('click', hideFileBrowser);
+
+// Function to select all items in the current directory
+function selectAllItems() {
+    // Get all file items in the current directory
+    const fileItems = document.querySelectorAll('.file-item');
+    
+    fileItems.forEach(item => {
+        const path = item.dataset.path;
+        
+        // Add to selected items set
+        selectedItems.add(path);
+        
+        // Add selected class
+        item.classList.add('selected');
+    });
+    
+    // Update the count
+    updateSelectedItemsCount();
+}
+
+// Update the file list in the UI
+function updateFileList(items) {
+    fileListElement.innerHTML = '';
+    
+    items.forEach(item => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.dataset.path = item.path;
+        fileItem.dataset.isDirectory = item.isDirectory;
+        
+        if (selectedItems.has(item.path)) {
+            fileItem.classList.add('selected');
+        }
+        
+        const icon = document.createElement('span');
+        icon.className = `file-item-icon codicon ${item.isDirectory ? 'codicon-folder' : 'codicon-file'}`;
+        
+        const name = document.createElement('span');
+        name.textContent = item.name;
+        
+        fileItem.appendChild(icon);
+        fileItem.appendChild(name);
+        
+        // Add click handler
+        fileItem.addEventListener('click', (e) => {
+            if (item.isDirectory && e.detail === 2) {
+                // Double click on directory - navigate into it
+                navigateToDirectory(item.path);
+            } else {
+                // Single click - select/deselect
+                if (selectedItems.has(item.path)) {
+                    selectedItems.delete(item.path);
+                    fileItem.classList.remove('selected');
+                } else {
+                    selectedItems.add(item.path);
+                    fileItem.classList.add('selected');
+                }
+                updateSelectedItemsCount();
+            }
+        });
+        
+        fileListElement.appendChild(fileItem);
+    });
+}
+
 // Modify the confirmSelectBtn click handler
 confirmSelectBtn.addEventListener('click', () => {
     if (selectedItems.size > 0) {
@@ -252,155 +511,64 @@ function navigateUp() {
     navigateToDirectory(parentPath || '');
 }
 
-// Update the file list in the UI
-function updateFileList(items) {
-    fileListElement.innerHTML = '';
-    
-    items.forEach(item => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.dataset.path = item.path;
-        fileItem.dataset.isDirectory = item.isDirectory;
-        
-        if (selectedItems.has(item.path)) {
-            fileItem.classList.add('selected');
-        }
-        
-        const icon = document.createElement('span');
-        icon.className = `file-item-icon codicon ${item.isDirectory ? 'codicon-folder' : 'codicon-file'}`;
-        
-        const name = document.createElement('span');
-        name.textContent = item.name;
-        
-        fileItem.appendChild(icon);
-        fileItem.appendChild(name);
-        
-        // Add click handler
-        fileItem.addEventListener('click', (e) => {
-            if (item.isDirectory && e.detail === 2) {
-                // Double click on directory - navigate into it
-                navigateToDirectory(item.path);
-            } else {
-                // Single click - select/deselect
-                if (selectedItems.has(item.path)) {
-                    selectedItems.delete(item.path);
-                    fileItem.classList.remove('selected');
-                } else {
-                    selectedItems.add(item.path);
-                    fileItem.classList.add('selected');
-                }
-                updateSelectedItemsCount();
-            }
-        });
-        
-        fileListElement.appendChild(fileItem);
-    });
-}
-
-// Extend the message handler to handle file browser responses
-window.addEventListener('message', (event) => {
+// Handle messages from the extension
+window.addEventListener('message', event => {
     const message = event.data;
+    console.log('Received message from extension:', message);
     
     switch (message.type) {
-        case 'addMessage':
-            addMessage(message.message, message.sender);
-            break;
-        case 'showTyping':
-            showTypingIndicator();
-            break;
-        case 'hideTyping':
-            hideTypingIndicator();
-            break;
-        case 'startAIMessage':
-            startAIMessage();
-            break;
-        case 'appendToAIMessage':
-            appendToAIMessage(message.message);
-            break;
-        case 'completeAIMessage':
-            completeAIMessage();
-            break;
         case 'updateContext':
-            console.log('Received context update:', message.contextItems);
             updateContextItems(message.contextItems);
             break;
+        case 'addMessage':
+            // Fix the parameter order and log for debugging
+            console.log('Adding message:', message.role, message.content);
+            addMessage(message.content, message.role);
+            break;
+        case 'typingIndicator':
+            setTypingIndicator(message.isTyping);
+            break;
         case 'fileBrowserUpdate':
-            // Update current path display
-            if (message.currentPath) {
-                currentPath = message.currentPath;
-                currentPathElement.textContent = message.currentPath;
-            }
-            
-            // Update file list with received items
             updateFileList(message.items);
+            currentPathElement.textContent = message.currentPath;
             break;
     }
 });
 
-// Add missing message handling functions
-let currentAIMessage = null;
-
-// Add a message to the chat
-function addMessage(message, sender) {
+// Add a message to the chat - ensure this is the only definition of this function
+function addMessage(content, role) {
+    console.log(`Adding ${role} message to chat`);
     const messageElement = document.createElement('div');
-    messageElement.className = `message ${sender}-message`;
     
-    if (sender === 'ai') {
-        messageElement.innerHTML = formatText(message);
+    // Fix the class name to match both 'user' and 'assistant' roles
+    messageElement.className = `message ${role}-message`;
+    
+    if (role === 'assistant' || role === 'ai') {
+        // Handle both 'assistant' and 'ai' role names
+        messageElement.innerHTML = formatText(content);
     } else {
         // For user messages, just use text content with pre-wrap
-        messageElement.textContent = message;
+        messageElement.textContent = content;
     }
     
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Show typing indicator
-function showTypingIndicator() {
-    const typingIndicator = document.createElement('div');
-    typingIndicator.className = 'typing-indicator';
-    typingIndicator.id = 'typing-indicator';
-    typingIndicator.textContent = 'AI is typing...';
-    messagesContainer.appendChild(typingIndicator);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-// Hide typing indicator
-function hideTypingIndicator() {
-    const typingIndicator = document.getElementById('typing-indicator');
-    if (typingIndicator) {
-        typingIndicator.remove();
+// Show/hide typing indicator - ensure this is the only definition
+function setTypingIndicator(isTyping) {
+    // Remove existing indicator if any
+    const existingIndicator = document.getElementById('typing-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
     }
-}
-
-// Start a new AI message
-function startAIMessage() {
-    // Create a new message element
-    currentAIMessage = document.createElement('div');
-    currentAIMessage.className = 'message ai-message';
-    messagesContainer.appendChild(currentAIMessage);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-// Append content to the current AI message
-function appendToAIMessage(content) {
-    if (currentAIMessage) {
-        // Keep track of the accumulated message content
-        if (!currentAIMessage.dataset.fullContent) {
-            currentAIMessage.dataset.fullContent = '';
-        }
-        
-        // Append the new content to the accumulated content
-        currentAIMessage.dataset.fullContent += content;
-        
-        // Format the full content with markdown
-        currentAIMessage.innerHTML = formatText(currentAIMessage.dataset.fullContent);
+    
+    if (isTyping) {
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing-indicator';
+        typingIndicator.id = 'typing-indicator';
+        typingIndicator.textContent = 'AI is typing...';
+        messagesContainer.appendChild(typingIndicator);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
-}
-
-// Complete the current AI message
-function completeAIMessage() {
-    currentAIMessage = null;
 }
