@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coder Chat</title>
+
+    <link rel="stylesheet" href="<%= stylesUri %>">
+    <link rel="stylesheet" href="<%= chatStylesUri %>">
+    <!-- Add Heroicons -->
+    <script src="https://cdn.jsdelivr.net/npm/heroicons@2.0.18/24/outline/esm/index.js" type="module"></script>
+</head>
+<body class="vscode-theme">
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>AI Coder Chat</h1>
+            <div class="model-selector-container">
+                <select id="modelSelector" class="model-selector" value="<%= currentModel.key %>">
+                    <%
+                    for (const info of Object.values(modelsInfo)) {
+                    %>
+                        <option value="<%= info.key %>"><%= info.name %></option>
+                    <%
+                    }
+                    %>
+                </select>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="messageContainer">
+            <!-- User message example -->
+            <div class="message user-message">
+                <div class="message-content">
+                    <p>Hello, I need help with my code.</p>
+                </div>
+            </div>
+            
+            <!-- AI response example -->
+            <div class="message ai-message">
+                <div class="message-content">
+                    <p>I'd be happy to help! What specific issue are you having with your code?</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <textarea id="messageInput" placeholder="Type your message here..." rows="1"></textarea>
+                <button id="sendButton" class="send-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="<%= chatScriptUri %>"></script>
+</body>
+</html>
