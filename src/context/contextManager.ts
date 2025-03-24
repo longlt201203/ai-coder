@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DirectoryMetadata } from './directory-metadata';
+import ignore from 'ignore';
 
 export class ContextManager {
     private chatHistory: { role: string, content: string }[] = [];
@@ -25,6 +26,77 @@ export class ContextManager {
         if (this.chatHistory.length > 20) {
             this.chatHistory.shift();
         }
+    }
+
+    private getGitignoreRules(dirPath: string): any {
+        // Create a new ignore instance
+        const ig = ignore();
+        
+        try {
+            // Find all .gitignore files in this directory and parent directories
+            let currentDir = dirPath;
+            const rootDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+            
+            // Add common patterns that should always be ignored
+            ig.add([
+                'node_modules',
+                'dist',
+                'build',
+                'out',
+                '.git',
+                '*.min.js',
+                '*.bundle.js'
+            ]);
+            
+            // Traverse up to find all applicable .gitignore files
+            while (currentDir && currentDir.startsWith(rootDir)) {
+                const gitignorePath = path.join(currentDir, '.gitignore');
+                
+                if (fs.existsSync(gitignorePath)) {
+                    try {
+                        const content = fs.readFileSync(gitignorePath, 'utf8');
+                        const lines = content.split(/\r?\n/)
+                            .filter(line => line.trim() && !line.startsWith('#'));
+                        
+                        ig.add(lines);
+                        console.log(`Loaded ${lines.length} rules from ${gitignorePath}`);
+                    } catch (error) {
+                        console.error(`Error reading .gitignore at ${gitignorePath}:`, error);
+                    }
+                }
+                
+                // Move up to parent directory
+                const parentDir = path.dirname(currentDir);
+                if (parentDir === currentDir) {
+                    break; // Prevent infinite loop at root
+                }
+                currentDir = parentDir;
+            }
+        } catch (error) {
+            console.error(`Error loading gitignore rules for ${dirPath}:`, error);
+        }
+        
+        return ig;
+    }
+    
+    /**
+     * Checks if a file should be ignored based on gitignore rules
+     * @param filePath Path to the file to check
+     * @param rootDir Root directory for relative path calculation
+     * @returns True if the file should be ignored
+     */
+    private shouldIgnoreFile(filePath: string, rootDir: string): boolean {
+        const ig = this.getGitignoreRules(rootDir);
+        
+        // Get relative path from root directory
+        const relativePath = path.relative(rootDir, filePath).replace(/\\/g, '/');
+        
+        // Special case: never ignore .gitignore files themselves
+        if (path.basename(filePath) === '.gitignore') {
+            return false;
+        }
+        
+        return ig.ignores(relativePath);
     }
     
     /**
@@ -212,6 +284,7 @@ export class ContextManager {
      */
     private async generateSimpleDirectoryListing(dirPath: string, maxDepth: number = 2): Promise<string> {
         let result = '';
+        const ig = this.getGitignoreRules(dirPath);
         
         const listDir = async (currentPath: string, depth: number = 0): Promise<void> => {
             if (depth > maxDepth) {
@@ -223,20 +296,32 @@ export class ContextManager {
                 const indent = '  '.repeat(depth);
                 
                 for (const entry of entries) {
-                    if (entry.startsWith('.')) {
-                        continue; // Skip hidden files
+                    // Skip hidden files except .gitignore
+                    if (entry.startsWith('.') && entry !== '.gitignore') {
+                        continue;
                     }
                     
                     const fullPath = path.join(currentPath, entry);
-                    const stats = fs.statSync(fullPath);
                     
-                    if (stats.isDirectory()) {
-                        result += `${indent}📁 ${entry}/\n`;
-                        await listDir(fullPath, depth + 1);
-                    } else {
-                        const ext = path.extname(entry).toLowerCase();
-                        const sizeKB = (stats.size / 1024).toFixed(1);
-                        result += `${indent}📄 ${entry} (${ext || 'no extension'}, ${sizeKB} KB)\n`;
+                    // Check if file should be ignored by gitignore rules
+                    const relativePath = path.relative(dirPath, fullPath).replace(/\\/g, '/');
+                    if (entry !== '.gitignore' && ig.ignores(relativePath)) {
+                        continue;
+                    }
+                    
+                    try {
+                        const stats = fs.statSync(fullPath);
+                        
+                        if (stats.isDirectory()) {
+                            result += `${indent}📁 ${entry}/\n`;
+                            await listDir(fullPath, depth + 1);
+                        } else {
+                            const ext = path.extname(entry).toLowerCase();
+                            const sizeKB = (stats.size / 1024).toFixed(1);
+                            result += `${indent}📄 ${entry} (${ext || 'no extension'}, ${sizeKB} KB)\n`;
+                        }
+                    } catch (error) {
+                        console.error(`Error processing entry ${fullPath}:`, error);
                     }
                 }
             } catch (error) {
@@ -400,7 +485,41 @@ export class ContextManager {
             // Save the updated context
             this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
             
+            // If it's a directory, analyze it to build metadata
+            if (fs.statSync(itemPath).isDirectory()) {
+                this.analyzeAndStoreDirectoryMetadata(itemPath);
+            }
+            
             console.log(`Added to context: ${itemPath}`);
+        }
+    }
+
+    private analyzeAndStoreDirectoryMetadata(dirPath: string): void {
+        // Create a list to store file information
+        const fileList: {path: string, size: number, type: string, relevanceScore?: number}[] = [];
+        
+        // Analyze the directory structure
+        this.analyzeDirectory(dirPath, fileList);
+        
+        // Create metadata object
+        const metadata: DirectoryMetadata = {
+            lastAnalyzed: new Date().toISOString(),
+            fileCount: fileList.length,
+            files: fileList
+        };
+        
+        // Store metadata in extension state
+        const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(dirPath)}`;
+        this.context.globalState.update(metadataKey, metadata);
+        
+        console.log(`Analyzed directory: ${dirPath}, found ${fileList.length} files`);
+    }
+
+    public refreshContextMetadata(): void {
+        for (const itemPath of this.selectedContextItems) {
+            if (fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()) {
+                this.analyzeAndStoreDirectoryMetadata(itemPath);
+            }
         }
     }
 
@@ -419,7 +538,8 @@ export class ContextManager {
         dirPath: string, 
         fileList: {path: string, size: number, type: string, relevanceScore?: number}[], 
         maxDepth: number = 3,
-        currentDepth: number = 0
+        currentDepth: number = 0,
+        rootDir: string = dirPath
     ): void {
         if (currentDepth > maxDepth) {
             return;
@@ -427,6 +547,7 @@ export class ContextManager {
         
         try {
             const entries = fs.readdirSync(dirPath);
+            const ig = this.getGitignoreRules(rootDir);
             
             // First pass: collect basic info about all files
             const fileInfos: {
@@ -439,19 +560,25 @@ export class ContextManager {
             }[] = [];
             
             for (const entry of entries) {
-                // Skip hidden files and directories
-                if (entry.startsWith('.')) {
+                // Skip hidden files and directories (except .gitignore)
+                if (entry.startsWith('.') && entry !== '.gitignore') {
                     continue;
                 }
                 
                 const fullPath = path.join(dirPath, entry);
+                
+                // Check if the file should be ignored based on .gitignore
+                const relativePath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
+                if (entry !== '.gitignore' && ig.ignores(relativePath)) {
+                    continue;
+                }
                 
                 try {
                     const stats = fs.statSync(fullPath);
                     
                     if (stats.isDirectory()) {
                         // Recursively analyze subdirectories
-                        this.analyzeDirectory(fullPath, fileList, maxDepth, currentDepth + 1);
+                        this.analyzeDirectory(fullPath, fileList, maxDepth, currentDepth + 1, rootDir);
                     } else if (stats.isFile()) {
                         // Skip files that are too large or binary
                         if (stats.size > 100 * 1024) {
@@ -480,7 +607,7 @@ export class ContextManager {
                         });
                     }
                 } catch (error) {
-                    console.error(`Error analyzing file ${fullPath}:`, error);
+                    console.error(`Error processing entry ${fullPath}:`, error);
                 }
             }
             
@@ -719,9 +846,19 @@ export class ContextManager {
             let dirSummary = `Directory: ${dirName}\nPath: ${dirPath}\n`;
             
             const entries = fs.readdirSync(dirPath);
+            const ig = this.getGitignoreRules(dirPath);
+            
+            // Filter entries based on gitignore
+            const filteredEntries = entries.filter(entry => {
+                if (entry === '.gitignore') return true; // Always include .gitignore
+                
+                const fullPath = path.join(dirPath, entry);
+                const relativePath = path.relative(dirPath, fullPath).replace(/\\/g, '/');
+                return !ig.ignores(relativePath);
+            });
             
             // Add subdirectory list to the summary
-            let dirs = entries.filter(entry => {
+            let dirs = filteredEntries.filter(entry => {
                 const fullPath = path.join(dirPath, entry);
                 return fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory();
             });
@@ -731,7 +868,7 @@ export class ContextManager {
             }
             
             // Add file list to the summary
-            let files = entries.filter(entry => {
+            let files = filteredEntries.filter(entry => {
                 const fullPath = path.join(dirPath, entry);
                 return fs.existsSync(fullPath) && fs.statSync(fullPath).isFile();
             });
@@ -744,16 +881,6 @@ export class ContextManager {
             result.push(dirSummary);
             
             // Process files first, then directories
-            files = entries.filter(entry => {
-                const fullPath = path.join(dirPath, entry);
-                return fs.existsSync(fullPath) && fs.statSync(fullPath).isFile();
-            });
-            
-            dirs = entries.filter(entry => {
-                const fullPath = path.join(dirPath, entry);
-                return fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory();
-            });
-            
             // Process files
             for (const file of files) {
                 const filePath = path.join(dirPath, file);
@@ -763,7 +890,9 @@ export class ContextManager {
             // Process directories
             for (const dir of dirs) {
                 const subDirPath = path.join(dirPath, dir);
-                await this.processDirectory(subDirPath, result, processedPaths, depth + 1);
+                if (!processedPaths.has(subDirPath)) {
+                    await this.processDirectory(subDirPath, result, processedPaths, depth + 1);
+                }
             }
         } catch (error) {
             console.error(`Error processing directory ${dirPath}:`, error);

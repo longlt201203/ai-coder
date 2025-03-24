@@ -9,15 +9,6 @@ import { Stream } from "@anthropic-ai/sdk/streaming.mjs";
 import { encode } from "gpt-tokenizer";
 import { ContextItem } from "./context-item";
 
-export interface FileModificationHandler {
-  applyCodeToFile(filePath: string, code: string): Promise<void>;
-  replaceEditorContent(
-    editor: vscode.TextEditor,
-    newContent: string
-  ): Promise<void>;
-  insertAtCursor(editor: vscode.TextEditor, code: string): Promise<void>;
-}
-
 export interface AIProvider {
   generateResponse(
     prompt: string,
@@ -26,17 +17,17 @@ export interface AIProvider {
   ): Promise<string>;
   isConfigured(): boolean;
   configureApiKey(): Promise<boolean>;
-  setFileModificationHandler(handler: FileModificationHandler): void;
+  addImageToHistory(name: string, dataUrl: string): void;
 }
 
 class AnthropicProvider implements AIProvider {
   private apiKey: string | undefined;
   private contextManager: ContextManager;
   private anthropic: Anthropic | undefined;
-  private fileModificationHandler: FileModificationHandler | undefined;
   private readonly MAX_TOKENS_PER_REQUEST = 100000; // Adjust based on Claude's limits
   private readonly MAX_FILES_PER_BATCH = 10; // Maximum number of files to include in a batch
   private readonly AI_MODEL: Model = "claude-3-5-sonnet-20241022";
+  private readonly AI_PROMPT = 'You are an AI coding assistant. When providing code from specific files, always include a comment at the beginning of the code block with the filename like this: "// filename: example.js" or "# filename: example.py". If you\'re providing a general code snippet without a specific file context, no filename comment is needed. Provide clear, concise explanations and practical code solutions.';
 
   constructor(
     context: vscode.ExtensionContext,
@@ -50,10 +41,6 @@ class AnthropicProvider implements AIProvider {
         apiKey: this.apiKey,
       });
     }
-  }
-
-  setFileModificationHandler(handler: FileModificationHandler): void {
-    this.fileModificationHandler = handler;
   }
 
   async generateResponse(
@@ -89,9 +76,8 @@ class AnthropicProvider implements AIProvider {
       return batchedResponse;
     } catch (error) {
       console.error("Error generating response:", error);
-      return `Error generating response: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      return `Error generating response: ${error instanceof Error ? error.message : String(error)
+        }`;
     }
   }
 
@@ -184,8 +170,7 @@ class AnthropicProvider implements AIProvider {
     const sortedItems = this.sortContextItemsByRelevance(contextItems);
 
     // Calculate tokens for the prompt and system message
-    const systemMessage =
-      "I am an AI coding assistant. I can help you with programming tasks, explain code, and provide suggestions.";
+    const systemMessage = this.AI_PROMPT;
     const promptTokens = this.countTokens(prompt);
     const systemTokens = this.countTokens(systemMessage);
     const baseTokens = promptTokens + systemTokens + 500; // Add buffer for message formatting
@@ -211,10 +196,10 @@ class AnthropicProvider implements AIProvider {
     // Create a wrapper for onPartialResponse that we can use for all batches
     const batchPartialResponseHandler = onPartialResponse
       ? (text: string) => {
-          if (onPartialResponse) {
-            onPartialResponse(text);
-          }
+        if (onPartialResponse) {
+          onPartialResponse(text);
         }
+      }
       : undefined;
 
     for (let i = 0; i < batches.length; i++) {
@@ -403,8 +388,7 @@ class AnthropicProvider implements AIProvider {
     // Add system message
     messages.push({
       role: "assistant",
-      content:
-        "I am an AI coding assistant. I can help you with programming tasks, explain code, and provide suggestions.",
+      content: this.AI_PROMPT
     });
 
     // Add history messages
@@ -502,6 +486,17 @@ class AnthropicProvider implements AIProvider {
     console.log("End of response stream - all chunks processed");
 
     return fullResponse;
+  }
+
+  public addImageToHistory(name: string, dataUrl: string): void {
+    // We need to use the contextManager to add to history
+    // Create a special content format for images
+    const imageContent = `[Image: ${name}]\ndata:image;${dataUrl}`;
+
+    // Add to the chat history through the context manager
+    this.contextManager.addToHistory('user', imageContent);
+
+    console.log(`Added image ${name} to chat history`);
   }
 
   async configureApiKey(): Promise<boolean> {

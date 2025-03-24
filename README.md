@@ -7,6 +7,8 @@ AI Coder is a VS Code extension that provides AI-powered coding assistance using
 - **AI Chat Interface**: Interact with Claude AI directly within VS Code
 - **Context-Aware Responses**: The AI understands your current file and project context
 - **Code Generation**: Generate code snippets based on your requirements
+- **File Context Management**: Easily add files to provide context for your questions
+- **Syntax Highlighting**: Code snippets in responses match your VS Code theme
 
 ## Requirements
 
@@ -27,6 +29,12 @@ AI Coder is a VS Code extension that provides AI-powered coding assistance using
 1. Open the Command Palette (Ctrl+Shift+P)
 2. Run "AI Coder: Open Chat"
 3. Type your question or request in the chat panel
+
+### Adding Context
+
+1. Click the "Add Context" button in the chat panel
+2. Select files from your project to provide as context
+3. The AI will use these files to provide more relevant answers
 
 ### Example Prompts
 

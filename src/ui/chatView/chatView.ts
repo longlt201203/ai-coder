@@ -1,48 +1,49 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AIProvider, FileModificationHandler } from '../ai/aiProvider';
-import { ContextManager } from '../context/contextManager';
+import { AIProvider } from '../../ai/aiProvider';
+import { ContextManager } from '../../context/contextManager';
 
-export class ChatViewProvider implements vscode.WebviewViewProvider, FileModificationHandler {
+export class ChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'ai-coder.chatView';
     private _view?: vscode.WebviewView;
     private _panel?: vscode.WebviewPanel;
-    
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _aiProvider: AIProvider,
         private readonly _contextManager: ContextManager
     ) {
-        // Register this class as the file modification handler
-        this._aiProvider.setFileModificationHandler(this);
     }
-    
+
     resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
-        
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
         };
-        
+
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-        
+
         // Give the webview time to initialize before sending messages
         setTimeout(() => {
             // Initialize context items
             this._sendContextToWebview(webviewView.webview);
         }, 500);
-        
+
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage':
                     this._handleUserMessage(data.message);
+                    break;
+                case 'uploadImage':
+                    await this._handleImageUploadData(data.imageData);
                     break;
                 case 'configureApiKey':
                     await this._aiProvider.configureApiKey();
@@ -56,7 +57,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             }
         });
     }
-    
+
     public openChatPanel() {
         // Create and show panel
         const panel = vscode.window.createWebviewPanel(
@@ -69,23 +70,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                 localResourceRoots: [this._extensionUri]
             }
         );
-        
+
         this._panel = panel;
-        
+
         // Set the HTML content
         panel.webview.html = this._getHtmlForWebview(panel.webview);
-        
+
         // Give the webview time to initialize before sending messages
         setTimeout(() => {
             // Initialize context items
             this._sendContextToWebview(panel.webview);
         }, 500);
-        
+
         // Handle messages from the webview
         panel.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage':
                     this._handleUserMessage(data.message, panel.webview);
+                    break;
+                case 'uploadImage':
+                    await this._handleImageUploadData(data.imageData);
                     break;
                 case 'configureApiKey':
                     await this._aiProvider.configureApiKey();
@@ -98,13 +102,76 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                     break;
             }
         });
-        
+
         // Clean up when the panel is closed
         panel.onDidDispose(() => {
             this._panel = undefined;
         });
     }
-    
+
+    private async _handleImageUploadData(imageData: any): Promise<void> {
+        try {
+            console.log('Handling image upload from webview');
+            
+            // Extract the image data from the data URL
+            const matches = imageData.dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+                throw new Error('Invalid image data format');
+            }
+            
+            const imageExt = matches[1];
+            const base64Data = matches[2];
+            const buffer = Buffer.from(base64Data, 'base64');
+            
+            // Create a unique filename in the workspace
+            const workspaceRoot = this._getWorkspaceRoot();
+            if (!workspaceRoot) {
+                throw new Error('No workspace folder is open');
+            }
+            
+            // Create an images directory in the workspace if it doesn't exist
+            const imagesDir = path.join(workspaceRoot, '.ai-coder-images');
+            if (!fs.existsSync(imagesDir)) {
+                fs.mkdirSync(imagesDir, { recursive: true });
+            }
+            
+            // Create a unique filename
+            const timestamp = new Date().getTime();
+            const filename = `${imageData.name.replace(/\.[^/.]+$/, '')}_${timestamp}.${imageExt}`;
+            const filePath = path.join(imagesDir, filename);
+            
+            // Write the image to disk
+            fs.writeFileSync(filePath, buffer);
+            
+            // Add to context as a regular file
+            this._contextManager.addToSelectedContext(filePath);
+            
+            // Update context in webview
+            this._sendContextToAllWebviews();
+            
+            // Notify the user
+            vscode.window.showInformationMessage(`Image saved to ${filePath} and added to context`);
+            
+            console.log(`Image saved to ${filePath} and added to context`);
+        } catch (error) {
+            console.error('Error processing uploaded image:', error);
+            vscode.window.showErrorMessage(`Failed to process image: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Format file size in a human-readable format
+     */
+    private _formatFileSize(bytes: number): string {
+        if (bytes < 1024) {
+            return `${bytes} B`;
+        } else if (bytes < 1024 * 1024) {
+            return `${(bytes / 1024).toFixed(1)} KB`;
+        } else {
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+    }
+
     /**
      * Check if the webview is responsive by sending a ping
      */
@@ -115,52 +182,63 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             timestamp: Date.now()
         });
     }
-    
+
     /**
      * Send the current context items to the webview
      */
     private _sendContextToWebview(webview?: vscode.Webview) {
-        const targetWebview = webview || 
-                             (this._panel ? this._panel.webview : undefined) || 
-                             (this._view ? this._view.webview : undefined);
-        
+        const targetWebview = webview ||
+            (this._panel ? this._panel.webview : undefined) ||
+            (this._view ? this._view.webview : undefined);
+
         if (!targetWebview) {
             return;
         }
-        
+
         // Check if webview is responsive
         this._checkWebviewResponsive(targetWebview);
-        
+
         const contextItems = this._contextManager.getSelectedContextItems();
         const formattedItems = contextItems.map(item => {
             let isDirectory = false;
+            let isImage = false;
+
             try {
-                isDirectory = fs.existsSync(item) && fs.statSync(item).isDirectory();
+                if (fs.existsSync(item)) {
+                    isDirectory = fs.statSync(item).isDirectory();
+
+                    // Check if it's an image file
+                    if (!isDirectory) {
+                        const ext = path.extname(item).toLowerCase();
+                        isImage = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext);
+                    }
+                }
             } catch (error) {
-                console.error(`Error checking if path is directory: ${item}`, error);
+                console.error(`Error checking path: ${item}`, error);
             }
-            
+
             return {
                 path: item,
                 name: path.basename(item),
-                isDirectory: isDirectory
+                isDirectory: isDirectory,
+                isImage: isImage
             };
         });
-        
+
         console.log('Sending context to webview:', formattedItems);
-        
+
         targetWebview.postMessage({
             type: 'updateContext',
             contextItems: formattedItems
         });
     }
-    
+
     /**
      * Handle context selection actions from the webview
      */
     private async _handleContextSelection(message: any, webview?: vscode.Webview) {
         console.log('Handling context action:', message);
-        
+
         if (message.action === 'add') {
             // This branch is no longer used for the main "Add Files/Folders" button
             // but we'll keep it for backward compatibility or other potential uses
@@ -170,7 +248,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                 canSelectMany: true,
                 openLabel: 'Add to Context'
             });
-            
+
             if (uris && uris.length > 0) {
                 for (const uri of uris) {
                     this._contextManager.addToSelectedContext(uri.fsPath);
@@ -187,19 +265,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             vscode.window.showInformationMessage('Context cleared');
         } else if (message.action === 'addCustom' && message.paths && message.paths.length > 0) {
             console.log('Adding custom paths to context:', message.paths);
-            
+
             // Handle custom paths from file browser
             for (const itemPath of message.paths) {
                 this._contextManager.addToSelectedContext(itemPath);
             }
-            
+
             // Use the dedicated method to update all webviews
             this._sendContextToAllWebviews();
-            
+
             vscode.window.showInformationMessage(`Added ${message.paths.length} item(s) to context`);
         }
     }
-    
+
     /**
      * Send context updates to all available webviews
      */
@@ -208,25 +286,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         if (this._panel && this._panel.webview) {
             this._sendContextToWebview(this._panel.webview);
         }
-        
+
         // Update sidebar webview if it exists
         if (this._view && this._view.webview) {
             this._sendContextToWebview(this._view.webview);
         }
     }
-    
+
     /**
      * Handle file browser actions from the webview
      */
     private async _handleFileBrowserAction(message: any, webview?: vscode.Webview) {
-        const targetWebview = webview || 
-                             (this._panel ? this._panel.webview : undefined) || 
-                             (this._view ? this._view.webview : undefined);
-        
+        const targetWebview = webview ||
+            (this._panel ? this._panel.webview : undefined) ||
+            (this._view ? this._view.webview : undefined);
+
         if (!targetWebview) {
             return;
         }
-        
+
         if (message.action === 'listDirectory') {
             try {
                 // Get workspace root
@@ -234,15 +312,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                 if (!workspaceRoot) {
                     throw new Error('No workspace folder is open');
                 }
-                
+
                 // If empty path or trying to navigate outside workspace, use workspace root
                 let requestedPath = message.path || workspaceRoot;
-                
+
                 // Ensure the requested path is within the workspace
                 if (!this._isPathWithinWorkspace(requestedPath, workspaceRoot)) {
                     requestedPath = workspaceRoot;
                 }
-                
+
                 const items = await this._listDirectory(requestedPath);
                 targetWebview.postMessage({
                     type: 'fileBrowserUpdate',
@@ -255,7 +333,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             }
         }
     }
-    
+
     /**
      * Get the workspace root path
      */
@@ -265,7 +343,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         }
         return undefined;
     }
-    
+
     /**
      * Check if a path is within the workspace
      */
@@ -274,25 +352,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         const normalizedWorkspacePath = path.normalize(workspaceRoot);
         return normalizedFilePath.startsWith(normalizedWorkspacePath);
     }
-    
+
     /**
      * List files and directories at the given path
      */
-    private async _listDirectory(dirPath: string): Promise<{name: string, path: string, isDirectory: boolean}[]> {
+    private async _listDirectory(dirPath: string): Promise<{ name: string, path: string, isDirectory: boolean }[]> {
         try {
-            const items: {name: string, path: string, isDirectory: boolean}[] = [];
+            const items: { name: string, path: string, isDirectory: boolean }[] = [];
             const files = fs.readdirSync(dirPath);
-            
+
             for (const file of files) {
                 try {
                     const fullPath = path.join(dirPath, file);
                     const stats = fs.statSync(fullPath);
-                    
+
                     // Skip hidden files and folders (starting with .)
                     if (file.startsWith('.')) {
                         continue;
                     }
-                    
+
                     items.push({
                         name: file,
                         path: fullPath,
@@ -303,7 +381,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                     console.warn(`Skipping inaccessible file: ${file}`, error);
                 }
             }
-            
+
             // Sort directories first, then files alphabetically
             return items.sort((a, b) => {
                 if (a.isDirectory && !b.isDirectory) return -1;
@@ -320,42 +398,42 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
      * Handle user message and generate AI response
      */
     private async _handleUserMessage(message: string, webview?: vscode.Webview) {
-        const targetWebview = webview || 
-                     (this._panel ? this._panel.webview : undefined) || 
-                     (this._view ? this._view.webview : undefined);
-        
+        const targetWebview = webview ||
+            (this._panel ? this._panel.webview : undefined) ||
+            (this._view ? this._view.webview : undefined);
+
         if (!targetWebview) {
             return;
         }
-        
+
         console.log('Handling user message:', message);
-        
+
         // Add user message to UI
         targetWebview.postMessage({
             type: 'addMessage',
             content: message,
             role: 'user'
         });
-        
+
         // Show typing indicator
         targetWebview.postMessage({
             type: 'typingIndicator',
             isTyping: true
         });
-        
+
         try {
             // Get context for the query
             const contextItems = await this._contextManager.getRelevantContext(message);
-            
+
             // Create a message ID for this response
             const messageId = `msg-${Date.now()}`;
-            
+
             // Initialize an empty AI message
             targetWebview.postMessage({
                 type: 'startAIMessage',
                 messageId: messageId
             });
-            
+
             // Define a callback for handling partial responses
             const onPartialResponse = (text: string) => {
                 targetWebview.postMessage({
@@ -364,36 +442,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                     messageId: messageId
                 });
             };
-            
+
             // Send message to AI provider with streaming callback
             console.log('Sending message to AI provider with context items:', contextItems.length);
             const response = await this._aiProvider.generateResponse(message, contextItems, onPartialResponse);
             console.log('Received complete response from AI provider');
-            
+
             // Hide typing indicator
             targetWebview.postMessage({
                 type: 'typingIndicator',
                 isTyping: false
             });
-            
+
             // Finalize the AI message
             targetWebview.postMessage({
                 type: 'finalizeAIMessage',
                 messageId: messageId
             });
-            
+
             // Add to context manager history
             this._contextManager.addToHistory('user', message);
             this._contextManager.addToHistory('assistant', response);
         } catch (error) {
             console.error('Error sending message to AI:', error);
-            
+
             // Hide typing indicator
             targetWebview.postMessage({
                 type: 'typingIndicator',
                 isTyping: false
             });
-            
+
             // Show error message
             targetWebview.postMessage({
                 type: 'addMessage',
@@ -402,30 +480,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             });
         }
     }
-    
+
     private _getHtmlForWebview(webview: vscode.Webview) {
         // Get path to HTML file
-        const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'ui', 'chatView.html');
-        
+        const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'ui', 'chatView', 'chatView.html');
+
         // Get paths to CSS and JS files
-        const cssPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView.css'));
-        const jsPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView.js'));
-        
+        const cssPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView', 'chatView.css'));
+        const jsPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView', 'chatView.js'));
+
         // Read the HTML file
         let html = fs.readFileSync(htmlPath, 'utf8');
-        
+
         // Replace placeholders with actual URIs
         html = html.replace('{{cssUri}}', cssPath.toString());
         html = html.replace('{{jsUri}}', jsPath.toString());
-        
+
         console.log('Generated HTML with JS path:', jsPath.toString());
-        
+
         // Return the HTML content
         return html;
     }
-    
+
     // Implement the FileModificationHandler interface methods
-    
+
     /**
      * Apply code to a specific file
      */
@@ -441,18 +519,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                     throw new Error(`Cannot resolve relative path: ${filePath}`);
                 }
             }
-            
+
             // Check if the file exists
             let document: vscode.TextDocument;
             let fileExists = false;
-            
+
             try {
                 document = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath));
                 fileExists = true;
             } catch (error) {
                 fileExists = false;
             }
-            
+
             if (!fileExists) {
                 // File doesn't exist, ask if we should create it
                 const createFile = await vscode.window.showInformationMessage(
@@ -460,28 +538,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                     'Create',
                     'Cancel'
                 );
-                
+
                 if (createFile !== 'Create') {
                     throw new Error('File creation cancelled by user');
                 }
-                
+
                 // Ensure directory exists
                 const directory = path.dirname(absolutePath);
                 if (!fs.existsSync(directory)) {
                     fs.mkdirSync(directory, { recursive: true });
                 }
-                
+
                 // Create the file with the code
                 fs.writeFileSync(absolutePath, code);
-                
+
                 // Open the newly created file
                 document = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath));
                 await vscode.window.showTextDocument(document);
-                
+
                 // Return success without throwing an error
                 return;
             }
-            
+
             // File exists, ask if we should modify it
             const modifyFile = await vscode.window.showInformationMessage(
                 `Modify ${path.basename(absolutePath)}?`,
@@ -489,20 +567,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
                 'Insert at cursor',
                 'Cancel'
             );
-            
+
             if (modifyFile === 'Cancel') {
                 throw new Error('File modification cancelled by user');
             }
-            
+
             // Open the document in an editor
             const editor = await vscode.window.showTextDocument(vscode.Uri.file(absolutePath));
-            
+
             if (modifyFile === 'Replace entire file') {
                 await this.replaceEditorContent(editor, code);
             } else if (modifyFile === 'Insert at cursor') {
                 await this.insertAtCursor(editor, code);
             }
-            
+
             // Return success without throwing an error
             return;
         } catch (error) {
@@ -510,7 +588,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             throw error; // Re-throw to allow the caller to handle it
         }
     }
-    
+
     /**
      * Replace the entire content of an editor
      */
@@ -522,12 +600,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             document.lineCount - 1,
             document.lineAt(document.lineCount - 1).text.length
         );
-        
+
         await editor.edit(editBuilder => {
             editBuilder.replace(fullRange, newContent);
         });
     }
-    
+
     /**
      * Insert code at the current cursor position
      */
@@ -549,13 +627,13 @@ export function registerChatView(
         aiProvider,
         contextManager
     );
-    
+
     const registration = vscode.window.registerWebviewViewProvider(
         ChatViewProvider.viewType,
         chatViewProvider
     );
-    
+
     context.subscriptions.push(registration);
-    
+
     return chatViewProvider;
 }

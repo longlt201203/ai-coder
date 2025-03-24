@@ -87,6 +87,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/parse-gitignore": "^1.0.2",
     "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
@@ -99,6 +100,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "axios": "^1.6.0",
-    "gpt-tokenizer": "^2.9.0"
+    "ejs": "^3.1.10",
+    "gpt-tokenizer": "^2.9.0",
+    "ignore": "^7.0.3",
+    "parse-gitignore": "^2.0.0"
   }
 }

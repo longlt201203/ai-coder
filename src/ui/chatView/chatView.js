@@ -1,93 +1,205 @@
+const { Marked } = globalThis.marked;
+const { markedHighlight } = globalThis.markedHighlight;
 
 const vscode = acquireVsCodeApi();
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
+const imageUploadButton = document.getElementById('imageUploadBtn');
+const fileInput = document.getElementById('fileInput');
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+const imagePreviews = document.getElementById('imagePreviews');
 const contextItemsContainer = document.getElementById('contextItems');
 const addContextBtn = document.getElementById('addContextBtn');
 const clearContextBtn = document.getElementById('clearContextBtn');
+const marked = new Marked(
+    markedHighlight({
+        emptyLangClass: 'hljs',
+        langPrefix: 'hljs language-',
+        highlight(code, lang, info) {
+            const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+            return hljs.highlight(code, { language }).value;
+        }
+    })
+);
 
-// Send message function
-function sendMessage() {
+let imageDataArray = [];
+
+imageUploadButton.addEventListener('click', () => {
+    fileInput.click(); // Trigger the file input dialog
+});
+
+// Handle file selection
+fileInput.addEventListener('change', (event) => {
+    if (event.target.files && event.target.files.length > 0) {
+        const files = event.target.files;
+
+        // Process each selected file
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            // Read the file as data URL
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // Create image data object
+                const imageData = {
+                    id: Date.now() + i, // Unique ID for each image
+                    name: file.name,
+                    size: `${Math.round(file.size / 1024)} KB`,
+                    dataUrl: e.target.result
+                };
+
+                // Add to array
+                imageDataArray.push(imageData);
+
+                // Create and add preview
+                addImagePreview(imageData);
+
+                // Show the container if it's not already visible
+                imagePreviewContainer.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Reset the file input so the same files can be selected again
+        fileInput.value = '';
+    }
+});
+
+function addImagePreview(imageData) {
+    const previewItem = document.createElement('div');
+    previewItem.className = 'image-preview-item';
+    previewItem.dataset.id = imageData.id;
+
+    const img = document.createElement('img');
+    img.src = imageData.dataUrl;
+    img.className = 'image-preview-thumbnail';
+    img.alt = imageData.name;
+
+    const info = document.createElement('div');
+    info.className = 'image-preview-info';
+    info.textContent = `${imageData.name} (${imageData.size})`;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'image-preview-remove';
+    removeBtn.innerHTML = '<i class="fa-solid fa-times"></i>';
+    removeBtn.title = 'Remove Image';
+
+    // Add remove functionality
+    removeBtn.addEventListener('click', () => {
+        // Remove from array
+        imageDataArray = imageDataArray.filter(img => img.id !== imageData.id);
+
+        // Remove from DOM
+        previewItem.remove();
+
+        // Hide container if no images left
+        if (imageDataArray.length === 0) {
+            imagePreviewContainer.style.display = 'none';
+        }
+    });
+
+    previewItem.appendChild(img);
+    previewItem.appendChild(info);
+    previewItem.appendChild(removeBtn);
+
+    imagePreviews.appendChild(previewItem);
+}
+
+function sendMessageWithImages() {
     const message = messageInput.value.trim();
-    if (message) {
-        vscode.postMessage({ type: 'sendMessage', message });
-        messageInput.value = '';
+
+    if (message || imageDataArray.length > 0) {
+        // If there are images, add them to the chat
+        if (imageDataArray.length > 0) {
+            // Add each image to the chat
+            imageDataArray.forEach(imageData => {
+                addImageToChat(imageData, 'user');
+
+                // Send image data to extension
+                vscode.postMessage({
+                    type: 'uploadImage',
+                    imageData: imageData
+                });
+            });
+
+            // Clear images
+            imageDataArray = [];
+            imagePreviews.innerHTML = '';
+            imagePreviewContainer.style.display = 'none';
+        }
+
+        // If there's a text message, send it
+        if (message) {
+            vscode.postMessage({ type: 'sendMessage', message });
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+        }
     }
 }
 
 // Event listeners
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        sendMessage();
+sendButton.addEventListener('click', sendMessageWithImages);
+
+messageInput.addEventListener('input', function () {
+    // Reset height to auto
+    this.style.height = 'auto';
+
+    // Count the number of newlines in the text
+    const lineCount = (this.value.match(/\n/g) || []).length;
+
+    // Calculate height based on content
+    const lineHeight = 20; // Approximate line height in pixels
+    const baseHeight = 20; // Height for a single line
+
+    // If there's no text or just a single line, use the base height
+    if (lineCount === 0) {
+        this.style.height = baseHeight + 'px';
+    } else {
+        // For multiple lines, calculate based on line count
+        const contentHeight = baseHeight + (lineHeight * lineCount);
+        const newHeight = Math.min(contentHeight, 120); // Cap at max height
+        this.style.height = newHeight + 'px';
     }
 });
 
-// Markdown formatting using marked.js
-function formatText(text) {
-    // Configure marked options
-    marked.setOptions({
-        breaks: true,        // Add line breaks on single newlines
-        gfm: true,           // Use GitHub Flavored Markdown
-        headerIds: false,    // Don't add IDs to headers
-        langPrefix: 'language-', // CSS language prefix for code blocks
-        highlight: function (code, lang) {
-            // Use highlight.js for syntax highlighting
-            if (lang && hljs.getLanguage(lang)) {
-                try {
-                    return hljs.highlight(code, { language: lang }).value;
-                } catch (err) {
-                    console.error('Highlight.js error:', err);
-                }
-            }
-            
-            // Fallback to auto-detection if language is not specified or not supported
-            try {
-                return hljs.highlightAuto(code).value;
-            } catch (err) {
-                console.error('Highlight.js auto-detection error:', err);
-            }
-            
-            // Return the original code if highlighting fails
-            return code;
-        }
-    });
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessageWithImages();
+    }
+});
 
+function setFormatedText(ele, text) {
     // Process the text with marked
     const html = marked.parse(text);
 
-    // Add copy buttons to code blocks
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
+    ele.innerHTML = html;
 
     // Process each code block to add copy buttons
-    tempDiv.querySelectorAll('pre code').forEach(codeBlock => {
+    ele.querySelectorAll('pre code').forEach(codeBlock => {
         const pre = codeBlock.parentNode;
-        
+
         // Create copy button
         const copyButton = document.createElement('button');
         copyButton.className = 'copy-code-button';
         copyButton.textContent = 'Copy';
         copyButton.addEventListener('click', () => {
             const code = codeBlock.textContent;
+            let copied = false;
             navigator.clipboard.writeText(code).then(() => {
+                if (copied) return;
                 copyButton.textContent = 'Copied!';
+                copied = true;
                 setTimeout(() => {
                     copyButton.textContent = 'Copy';
+                    copied = false;
                 }, 2000);
             });
         });
-        
-        pre.appendChild(copyButton);
-        
-        // Ensure the code block has hljs class
-        if (!codeBlock.classList.contains('hljs')) {
-            hljs.highlightElement(codeBlock);
-        }
-    });
 
-    return tempDiv.innerHTML;
+        pre.appendChild(copyButton);
+    });
 }
 
 // Handle context item updates from extension
@@ -181,7 +293,6 @@ function updateContextItems(items) {
     });
 }
 
-// Update the file list in the UI
 function updateFileList(items) {
     fileListElement.innerHTML = '';
 
@@ -190,6 +301,7 @@ function updateFileList(items) {
         fileItem.className = 'file-item';
         fileItem.dataset.path = item.path;
         fileItem.dataset.isDirectory = item.isDirectory;
+        fileItem.dataset.isImage = item.isImage || false;
 
         if (selectedItems.has(item.path)) {
             fileItem.classList.add('selected');
@@ -200,12 +312,22 @@ function updateFileList(items) {
         // Set appropriate icon based on file type
         if (item.isDirectory) {
             icon.className = 'file-item-icon fa-solid fa-folder';
+        } else if (item.isImage) {
+            icon.className = 'file-item-icon fa-solid fa-image';
         } else {
             // Get file extension
             const extension = item.name.split('.').pop().toLowerCase();
 
             // Use a simpler approach with fewer icon types but more reliable
             switch (extension) {
+                case 'jpg':
+                case 'jpeg':
+                case 'png':
+                case 'gif':
+                case 'bmp':
+                case 'webp':
+                    icon.className = 'file-item-icon fa-solid fa-image';
+                    break;
                 case 'js':
                     icon.className = 'file-item-icon fa-brands fa-js';
                     break;
@@ -233,6 +355,9 @@ function updateFileList(items) {
                 case 'txt':
                     icon.className = 'file-item-icon fa-solid fa-file-lines';
                     break;
+                case 'json':
+                    icon.className = 'file-item-icon fa-solid fa-brackets-curly';
+                    break;
                 default:
                     icon.className = 'file-item-icon fa-solid fa-file';
             }
@@ -244,7 +369,38 @@ function updateFileList(items) {
         fileItem.appendChild(icon);
         fileItem.appendChild(name);
 
-        // Add click handler
+        // Add image preview for image files
+        if (item.isImage) {
+            fileItem.classList.add('image-file');
+
+            // Create preview element that will be shown on hover
+            const preview = document.createElement('div');
+            preview.className = 'image-preview';
+
+            // Create image element with VS Code URI
+            const img = document.createElement('img');
+            img.src = `vscode-resource:${item.path}`;
+            img.alt = item.name;
+
+            preview.appendChild(img);
+
+            // Show preview on hover
+            fileItem.addEventListener('mouseenter', () => {
+                document.body.appendChild(preview);
+
+                // Position preview next to the item
+                const rect = fileItem.getBoundingClientRect();
+                preview.style.left = `${rect.right + 10}px`;
+                preview.style.top = `${rect.top}px`;
+            });
+
+            fileItem.addEventListener('mouseleave', () => {
+                if (document.body.contains(preview)) {
+                    document.body.removeChild(preview);
+                }
+            });
+        }
+
         fileItem.addEventListener('click', (e) => {
             if (item.isDirectory && e.detail === 2) {
                 // Double click on directory - navigate into it
@@ -401,51 +557,6 @@ function selectAllItems() {
     updateSelectedItemsCount();
 }
 
-// Update the file list in the UI
-function updateFileList(items) {
-    fileListElement.innerHTML = '';
-
-    items.forEach(item => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.dataset.path = item.path;
-        fileItem.dataset.isDirectory = item.isDirectory;
-
-        if (selectedItems.has(item.path)) {
-            fileItem.classList.add('selected');
-        }
-
-        const icon = document.createElement('span');
-        icon.className = `file-item-icon codicon ${item.isDirectory ? 'codicon-folder' : 'codicon-file'}`;
-
-        const name = document.createElement('span');
-        name.textContent = item.name;
-
-        fileItem.appendChild(icon);
-        fileItem.appendChild(name);
-
-        // Add click handler
-        fileItem.addEventListener('click', (e) => {
-            if (item.isDirectory && e.detail === 2) {
-                // Double click on directory - navigate into it
-                navigateToDirectory(item.path);
-            } else {
-                // Single click - select/deselect
-                if (selectedItems.has(item.path)) {
-                    selectedItems.delete(item.path);
-                    fileItem.classList.remove('selected');
-                } else {
-                    selectedItems.add(item.path);
-                    fileItem.classList.add('selected');
-                }
-                updateSelectedItemsCount();
-            }
-        });
-
-        fileListElement.appendChild(fileItem);
-    });
-}
-
 // Modify the confirmSelectBtn click handler
 confirmSelectBtn.addEventListener('click', () => {
     if (selectedItems.size > 0) {
@@ -544,7 +655,7 @@ window.addEventListener('message', event => {
             // Create a new message element with the given ID
             const aiMessageDiv = document.createElement('div');
             aiMessageDiv.id = message.messageId;
-            aiMessageDiv.className = 'message assistant-message';
+            aiMessageDiv.className = 'message ai-message';
             aiMessageDiv.innerHTML = ''; // Start empty
             messagesContainer.appendChild(aiMessageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -554,27 +665,20 @@ window.addEventListener('message', event => {
             const currentAiMessage = document.getElementById(message.messageId);
             if (currentAiMessage) {
                 // We need to maintain the full markdown text to render it properly
-                
+
                 // If this is the first chunk, initialize the data attribute
                 if (!currentAiMessage.hasAttribute('data-markdown-content')) {
                     currentAiMessage.setAttribute('data-markdown-content', '');
                 }
-                
+
                 // Append the new chunk to our stored markdown content
                 const currentMarkdown = currentAiMessage.getAttribute('data-markdown-content');
                 const updatedMarkdown = currentMarkdown + message.content;
                 currentAiMessage.setAttribute('data-markdown-content', updatedMarkdown);
-                
+
                 // Render the complete markdown content
-                currentAiMessage.innerHTML = formatText(updatedMarkdown);
-                
-                // Explicitly highlight code blocks in this message
-                currentAiMessage.querySelectorAll('pre code').forEach(block => {
-                    if (!block.classList.contains('hljs')) {
-                        hljs.highlightElement(block);
-                    }
-                });
-                
+                setFormatedText(currentAiMessage, updatedMarkdown);
+
                 // Scroll to the bottom
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
@@ -588,8 +692,90 @@ window.addEventListener('message', event => {
                 finalMessage.classList.add('complete');
             }
             break;
+
+        case 'imageUploaded':
+            // Handle image uploaded from extension
+            if (message.imageData) {
+                addImageToChat(message.imageData, 'user');
+            }
+            break;
     }
 });
+
+function addImageToChat(imageData, role) {
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${role}-message`;
+
+    // Create image element
+    const img = document.createElement('img');
+    img.src = imageData.dataUrl;
+    img.alt = imageData.name || 'Uploaded image';
+    img.className = 'chat-image';
+    img.title = imageData.name || 'Uploaded image';
+
+    // Add click to expand functionality
+    img.addEventListener('click', () => {
+        showExpandedImage(imageData.dataUrl, imageData.name);
+    });
+
+    // Add image info
+    const imageInfo = document.createElement('div');
+    imageInfo.className = 'image-info';
+    imageInfo.textContent = `Image: ${imageData.name || 'Uploaded image'} (${imageData.size || 'unknown size'})`;
+
+    messageElement.appendChild(imageInfo);
+    messageElement.appendChild(img);
+
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function showExpandedImage(src, title) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'image-overlay';
+
+    // Create image container
+    const container = document.createElement('div');
+    container.className = 'expanded-image-container';
+
+    // Create image
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = title || 'Expanded image';
+    img.className = 'expanded-image';
+
+    // Create title
+    if (title) {
+        const titleElement = document.createElement('div');
+        titleElement.className = 'expanded-image-title';
+        titleElement.textContent = title;
+        container.appendChild(titleElement);
+    }
+
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.className = 'expanded-image-close';
+    closeButton.innerHTML = '&times;';
+    closeButton.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+
+    // Add elements to container
+    container.appendChild(closeButton);
+    container.appendChild(img);
+    overlay.appendChild(container);
+
+    // Add click outside to close
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+
+    // Add to body
+    document.body.appendChild(overlay);
+}
 
 // Add a message to the chat - ensure this is the only definition of this function
 function addMessage(content, role) {
@@ -601,7 +787,7 @@ function addMessage(content, role) {
 
     if (role === 'assistant' || role === 'ai') {
         // Handle both 'assistant' and 'ai' role names
-        messageElement.innerHTML = formatText(content);
+        setFormatedText(currentAiMessage, updatedMarkdown);
     } else {
         // For user messages, just use text content with pre-wrap
         messageElement.textContent = content;
@@ -609,8 +795,6 @@ function addMessage(content, role) {
 
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-    highlightCodeBlocks();
 }
 
 // Show/hide typing indicator - ensure this is the only definition
@@ -630,55 +814,3 @@ function setTypingIndicator(isTyping) {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 }
-
-// Add this at the end of your file
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize highlight.js as soon as possible
-    if (typeof hljs !== 'undefined') {
-        console.log('Initializing highlight.js immediately');
-        highlightCodeBlocks();
-    }
-
-    // Add a MutationObserver to catch dynamically added content
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-                // Check if any of the added nodes contain code blocks
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) { // ELEMENT_NODE
-                        const codeBlocks = node.querySelectorAll('pre code');
-                        if (codeBlocks.length > 0) {
-                            highlightCodeBlocks();
-                        }
-                    }
-                });
-            }
-        });
-    });
-
-    // Start observing the messages container
-    if (messagesContainer) {
-        observer.observe(messagesContainer, { childList: true, subtree: true });
-    }
-});
-
-// Also add this to highlight code blocks when new messages are added
-function highlightCodeBlocks() {
-    if (typeof hljs !== 'undefined') {
-        console.log('Highlighting code blocks');
-        document.querySelectorAll('pre code').forEach((block) => {
-            if (!block.classList.contains('hljs')) {
-                try {
-                    hljs.highlightElement(block);
-                } catch (err) {
-                    console.error('Error highlighting code block:', err);
-                }
-            }
-        });
-    } else {
-        console.error('highlight.js is not loaded');
-    }
-}
-
-// Call this function after adding new messages to the chat
-// For example, add it to the end of your addMessage function
