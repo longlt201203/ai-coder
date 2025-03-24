@@ -33,7 +33,23 @@ function formatText(text) {
         headerIds: false,    // Don't add IDs to headers
         langPrefix: 'language-', // CSS language prefix for code blocks
         highlight: function (code, lang) {
-            // You could add a syntax highlighter here in the future
+            // Use highlight.js for syntax highlighting
+            if (lang && hljs.getLanguage(lang)) {
+                try {
+                    return hljs.highlight(code, { language: lang }).value;
+                } catch (err) {
+                    console.error('Highlight.js error:', err);
+                }
+            }
+            
+            // Fallback to auto-detection if language is not specified or not supported
+            try {
+                return hljs.highlightAuto(code).value;
+            } catch (err) {
+                console.error('Highlight.js auto-detection error:', err);
+            }
+            
+            // Return the original code if highlighting fails
             return code;
         }
     });
@@ -45,37 +61,29 @@ function formatText(text) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
 
-    // Find all pre elements and add copy buttons
-    const preElements = tempDiv.querySelectorAll('pre');
-    preElements.forEach(pre => {
+    // Process each code block to add copy buttons
+    tempDiv.querySelectorAll('pre code').forEach(codeBlock => {
+        const pre = codeBlock.parentNode;
+        
+        // Create copy button
         const copyButton = document.createElement('button');
         copyButton.className = 'copy-code-button';
         copyButton.textContent = 'Copy';
-        copyButton.addEventListener('click', function () {
-            const code = pre.querySelector('code').innerText;
+        copyButton.addEventListener('click', () => {
+            const code = codeBlock.textContent;
             navigator.clipboard.writeText(code).then(() => {
                 copyButton.textContent = 'Copied!';
                 setTimeout(() => {
                     copyButton.textContent = 'Copy';
                 }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
             });
         });
+        
         pre.appendChild(copyButton);
-    });
-
-    // Special handling for file paths
-    const codeElements = tempDiv.querySelectorAll('code');
-    codeElements.forEach(code => {
-        // If this is not inside a pre (it's an inline code)
-        if (!code.parentElement.matches('pre')) {
-            const text = code.innerText;
-            // Check if it looks like a file path
-            if (text.match(/\.(js|ts|py|html|css|json|md|cpp|h|cs|java|go|rb|php)$/i) ||
-                text.includes('/') || text.includes('\\')) {
-                code.classList.add('filepath');
-            }
+        
+        // Ensure the code block has hljs class
+        if (!codeBlock.classList.contains('hljs')) {
+            hljs.highlightElement(codeBlock);
         }
     });
 
@@ -560,6 +568,13 @@ window.addEventListener('message', event => {
                 // Render the complete markdown content
                 currentAiMessage.innerHTML = formatText(updatedMarkdown);
                 
+                // Explicitly highlight code blocks in this message
+                currentAiMessage.querySelectorAll('pre code').forEach(block => {
+                    if (!block.classList.contains('hljs')) {
+                        hljs.highlightElement(block);
+                    }
+                });
+                
                 // Scroll to the bottom
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
@@ -594,6 +609,8 @@ function addMessage(content, role) {
 
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    highlightCodeBlocks();
 }
 
 // Show/hide typing indicator - ensure this is the only definition
@@ -613,3 +630,55 @@ function setTypingIndicator(isTyping) {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 }
+
+// Add this at the end of your file
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize highlight.js as soon as possible
+    if (typeof hljs !== 'undefined') {
+        console.log('Initializing highlight.js immediately');
+        highlightCodeBlocks();
+    }
+
+    // Add a MutationObserver to catch dynamically added content
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                // Check if any of the added nodes contain code blocks
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) { // ELEMENT_NODE
+                        const codeBlocks = node.querySelectorAll('pre code');
+                        if (codeBlocks.length > 0) {
+                            highlightCodeBlocks();
+                        }
+                    }
+                });
+            }
+        });
+    });
+
+    // Start observing the messages container
+    if (messagesContainer) {
+        observer.observe(messagesContainer, { childList: true, subtree: true });
+    }
+});
+
+// Also add this to highlight code blocks when new messages are added
+function highlightCodeBlocks() {
+    if (typeof hljs !== 'undefined') {
+        console.log('Highlighting code blocks');
+        document.querySelectorAll('pre code').forEach((block) => {
+            if (!block.classList.contains('hljs')) {
+                try {
+                    hljs.highlightElement(block);
+                } catch (err) {
+                    console.error('Error highlighting code block:', err);
+                }
+            }
+        });
+    } else {
+        console.error('highlight.js is not loaded');
+    }
+}
+
+// Call this function after adding new messages to the chat
+// For example, add it to the end of your addMessage function

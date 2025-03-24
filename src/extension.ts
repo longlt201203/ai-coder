@@ -23,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
         const chatView = registerChatView(context, aiProvider, contextManager);
         
         // Register all commands
-        registerCommands(context, aiProvider, chatView, contextManager);
+        registerCommands(context, aiProvider, chatView);
         
         // Register a simple hello world command directly here as a fallback
         const helloWorldCommand = vscode.commands.registerCommand('ai-coder.helloWorld', () => {

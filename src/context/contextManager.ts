@@ -1,18 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-
-// Add this interface for directory metadata
-interface DirectoryMetadata {
-    lastAnalyzed: string;
-    fileCount: number;
-    files: Array<{
-        path: string;
-        size: number;
-        type: string;
-        relevanceScore?: number;
-    }>;
-}
+import { DirectoryMetadata } from './directory-metadata';
 
 export class ContextManager {
     private chatHistory: { role: string, content: string }[] = [];

@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AIProvider, FileModificationHandler } from '../ai/aiProvider';
 import { ContextManager } from '../context/contextManager';
-import { ContextItem } from '../ai/aiProvider';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, FileModificationHandler {
     public static readonly viewType = 'ai-coder.chatView';
@@ -316,34 +315,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
             throw new Error(`Could not access directory: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-    
-    /**
-     * List Windows drives
-     */
-    private _listWindowsDrives(): {name: string, path: string, isDirectory: boolean}[] {
-        const drives: {name: string, path: string, isDirectory: boolean}[] = [];
-        
-        // Common drive letters
-        const driveLetters = ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-        
-        for (const letter of driveLetters) {
-            const drivePath = `${letter}:\\`;
-            try {
-                // Check if drive exists by trying to read its contents
-                fs.readdirSync(drivePath);
-                drives.push({
-                    name: `${letter}: Drive`,
-                    path: drivePath,
-                    isDirectory: true
-                });
-            } catch (error) {
-                // Drive doesn't exist or is not accessible, skip it
-            }
-        }
-        
-        return drives;
-    }
-    
+
     /**
      * Handle user message and generate AI response
      */
@@ -431,135 +403,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         }
     }
     
-    /**
-     * Get context items for the prompt
-     */
-    private async _getContextForPrompt(prompt: string): Promise<(string | ContextItem)[]> {
-        const contextItems: (string | ContextItem)[] = [];
-        
-        // Add current file if available
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-            const document = activeEditor.document;
-            const fileName = path.basename(document.fileName);
-            const fileContent = document.getText();
-            
-            contextItems.push({
-                type: 'current-file',
-                content: fileContent,
-                metadata: {
-                    fileName: fileName,
-                    path: document.fileName,
-                    language: document.languageId
-                }
-            });
-            
-            console.log('Added current file context to items:', document.fileName);
-        }
-        
-        // Add selected context items
-        const selectedItems = this._contextManager.getSelectedContextItems();
-        
-        for (const itemPath of selectedItems) {
-            try {
-                if (!fs.existsSync(itemPath)) {
-                    console.warn(`Context item does not exist: ${itemPath}`);
-                    continue;
-                }
-                
-                const stats = fs.statSync(itemPath);
-                const fileName = path.basename(itemPath);
-                
-                if (stats.isFile()) {
-                    // Get file extension to determine language
-                    const ext = path.extname(itemPath).toLowerCase();
-                    let language = '';
-                    
-                    // Map common extensions to languages
-                    if (['.js', '.jsx'].includes(ext)) language = 'javascript';
-                    else if (['.ts', '.tsx'].includes(ext)) language = 'typescript';
-                    else if (['.py'].includes(ext)) language = 'python';
-                    else if (['.html'].includes(ext)) language = 'html';
-                    else if (['.css'].includes(ext)) language = 'css';
-                    else if (['.json'].includes(ext)) language = 'json';
-                    else if (['.md'].includes(ext)) language = 'markdown';
-                    
-                    // Read file content
-                    const content = fs.readFileSync(itemPath, 'utf8');
-                    
-                    contextItems.push({
-                        type: 'file',
-                        content: content,
-                        metadata: {
-                            fileName: fileName,
-                            path: itemPath,
-                            language: language
-                        }
-                    });
-                    
-                    console.log(`Added file to context: ${itemPath}`);
-                } else if (stats.isDirectory()) {
-                    // For directories, add a structure overview
-                    const files = this._getDirectoryFiles(itemPath, 2); // Get files up to 2 levels deep
-                    
-                    contextItems.push({
-                        type: 'text',
-                        content: `Directory structure for ${itemPath}:\n${files.join('\n')}`,
-                        metadata: {
-                            fileName: fileName,
-                            path: itemPath
-                        }
-                    });
-                    
-                    console.log(`Added directory structure to context: ${itemPath}`);
-                }
-            } catch (error) {
-                console.error(`Error processing context item ${itemPath}:`, error);
-            }
-        }
-        
-        return contextItems;
-    }
-    
-    /**
-     * Get files in a directory recursively up to a certain depth
-     */
-    private _getDirectoryFiles(dirPath: string, maxDepth: number, currentDepth = 0): string[] {
-        if (currentDepth > maxDepth) {
-            return [];
-        }
-        
-        try {
-            const entries = fs.readdirSync(dirPath);
-            let result: string[] = [];
-            
-            for (const entry of entries) {
-                const fullPath = path.join(dirPath, entry);
-                const indent = '  '.repeat(currentDepth);
-                
-                try {
-                    const stats = fs.statSync(fullPath);
-                    
-                    if (stats.isDirectory()) {
-                        result.push(`${indent}📁 ${entry}/`);
-                        // Recursively get files in subdirectory
-                        const subFiles = this._getDirectoryFiles(fullPath, maxDepth, currentDepth + 1);
-                        result = result.concat(subFiles);
-                    } else {
-                        result.push(`${indent}📄 ${entry}`);
-                    }
-                } catch (error) {
-                    console.error(`Error processing ${fullPath}:`, error);
-                }
-            }
-            
-            return result;
-        } catch (error) {
-            console.error(`Error reading directory ${dirPath}:`, error);
-            return [];
-        }
-    }
-    
     private _getHtmlForWebview(webview: vscode.Webview) {
         // Get path to HTML file
         const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'ui', 'chatView.html');
@@ -579,48 +422,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, FileModific
         
         // Return the HTML content
         return html;
-    }
-    
-    /**
-     * Process the AI response for file modification commands
-     */
-    private async _processResponseForFileModifications(response: string, editor?: vscode.TextEditor): Promise<void> {
-        if (!editor) {
-            return;
-        }
-        
-        // Look for code blocks with file paths in the response
-        const codeBlockRegex = /```([a-zA-Z0-9_\-+]+)(?::([^\n]+))?\n([\s\S]*?)```/g;
-        let match;
-        
-        while ((match = codeBlockRegex.exec(response)) !== null) {
-            const language = match[1];
-            const filePath = match[2];
-            const code = match[3];
-            
-            // If there's a file path specified, try to modify that file
-            if (filePath) {
-                await this.applyCodeToFile(filePath, code);
-            } 
-            // Otherwise, if it's a code block without a path, offer to apply it to the current file
-            else if (editor) {
-                const fileName = path.basename(editor.document.fileName);
-                const fileExtension = path.extname(fileName).replace('.', '');
-                
-                // Only suggest applying if the language matches the file extension
-                if (language.toLowerCase() === fileExtension.toLowerCase()) {
-                    const applyChanges = await vscode.window.showInformationMessage(
-                        `Apply the suggested code to ${fileName}?`,
-                        'Apply',
-                        'Cancel'
-                    );
-                    
-                    if (applyChanges === 'Apply') {
-                        await this.replaceEditorContent(editor, code);
-                    }
-                }
-            }
-        }
     }
     
     // Implement the FileModificationHandler interface methods

@@ -4,26 +4,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   MessageParam,
   Model,
-  ToolUnion,
 } from "@anthropic-ai/sdk/resources/index.mjs";
-import * as fs from "fs";
-import * as path from "path";
 import { Stream } from "@anthropic-ai/sdk/streaming.mjs";
-import { aiTools } from "./aiTools";
-import { encode } from "gpt-tokenizer"; // You'll need to add this package
-
-// Define a context item interface for more structured context
-export interface ContextItem {
-  type: "file" | "selection" | "text" | "current-file";
-  content: string;
-  metadata?: {
-    fileName?: string;
-    language?: string;
-    path?: string;
-    lineStart?: number;
-    lineEnd?: number;
-  };
-}
+import { encode } from "gpt-tokenizer";
+import { ContextItem } from "./context-item";
 
 export interface FileModificationHandler {
   applyCodeToFile(filePath: string, code: string): Promise<void>;
@@ -121,7 +105,6 @@ class AnthropicProvider implements AIProvider {
 
     // Prepare messages with context
     const messages = this.prepareMessages(contextText, prompt);
-    const tools = this.prepareTools();
 
     try {
       // Call Anthropic API with streaming and tools
@@ -130,7 +113,6 @@ class AnthropicProvider implements AIProvider {
         max_tokens: 4000,
         messages: messages,
         temperature: 0.7,
-        tools: tools,
         stream: true,
       });
 
@@ -260,7 +242,6 @@ class AnthropicProvider implements AIProvider {
     onPartialResponse?: (text: string) => void
   ): Promise<string> {
     const messages = this.prepareMessages("", prompt);
-    const tools = this.prepareTools();
 
     // Call Anthropic API with streaming and tools
     const stream = await this.anthropic!.messages.create({
@@ -268,7 +249,6 @@ class AnthropicProvider implements AIProvider {
       max_tokens: 4000,
       messages: messages,
       temperature: 0.7,
-      tools: tools,
       stream: true,
     });
 
@@ -445,39 +425,6 @@ class AnthropicProvider implements AIProvider {
   }
 
   /**
-   * Prepare tools for the API call
-   */
-  private prepareTools(): ToolUnion[] {
-    return [
-      {
-        name: "write_file",
-        description: "Write or modify a file with the given content",
-        input_schema: {
-          type: "object",
-          properties: {
-            path: {
-              type: "string",
-              description:
-                "The path to the file (absolute or relative to workspace)",
-            },
-            content: {
-              type: "string",
-              description: "The content to write to the file",
-            },
-            mode: {
-              type: "string",
-              enum: ["replace", "insert"],
-              description:
-                "Whether to replace the entire file or insert at cursor",
-            },
-          },
-          required: ["path", "content"],
-        },
-      },
-    ];
-  }
-
-  /**
    * Process the response stream and handle tool uses
    */
   private async processResponseStream(
@@ -536,11 +483,6 @@ class AnthropicProvider implements AIProvider {
           console.log("End of content block");
           if (currentToolName && currentStrParams) {
             // Execute the tool function
-            await this.executeToolFunction(
-              currentToolName,
-              currentStrParams,
-              onPartialResponse
-            );
 
             // Reset tool tracking variables
             currentToolName = "";
@@ -560,63 +502,6 @@ class AnthropicProvider implements AIProvider {
     console.log("End of response stream - all chunks processed");
 
     return fullResponse;
-  }
-
-  /**
-   * Execute a tool function based on the tool name and parameters
-   */
-  private async executeToolFunction(
-    toolName: string,
-    paramString: string,
-    onPartialResponse?: (text: string) => void
-  ): Promise<void> {
-    console.log(`Executing tool: ${toolName} with params: ${paramString}`);
-
-    try {
-      // Parse the JSON parameters
-      const params = JSON.parse(paramString);
-      if (aiTools[toolName]) {
-        await aiTools[toolName](params);
-      } else {
-        throw new Error(`AI tool '${toolName}' not found!`);
-      }
-    } catch (error) {
-      console.error(`Error executing tool ${toolName}:`, error);
-      if (onPartialResponse) {
-        onPartialResponse(
-          `\n\n*Error executing tool '${toolName}': ${
-            error instanceof Error ? error.message : String(error)
-          }*\n\n`
-        );
-      }
-    }
-  }
-
-  /**
-   * Resolve a file path against the workspace folder if it's relative
-   */
-  private resolveFilePath(filePath: string): string {
-    if (
-      path.isAbsolute(filePath) ||
-      !vscode.workspace.workspaceFolders ||
-      vscode.workspace.workspaceFolders.length === 0
-    ) {
-      return filePath;
-    }
-
-    const workspaceFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
-    return path.resolve(workspaceFolder, filePath);
-  }
-
-  /**
-   * Ensure a directory exists before writing a file
-   */
-  private ensureDirectoryExists(filePath: string): void {
-    const directory = path.dirname(filePath);
-    if (!fs.existsSync(directory)) {
-      fs.mkdirSync(directory, { recursive: true });
-      console.log(`Created directory: ${directory}`);
-    }
   }
 
   async configureApiKey(): Promise<boolean> {

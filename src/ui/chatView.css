@@ -599,3 +599,58 @@ body {
 #send-button:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
+
+/* Highlight.js integration */
+.hljs {
+    background: var(--vscode-editor-background) !important;
+    color: var(--vscode-editor-foreground) !important;
+    padding: 0 !important;
+}
+
+/* Override highlight.js theme colors to use VS Code theme */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name,
+.hljs-tag {
+    color: var(--vscode-symbolIcon-keywordForeground, #569cd6) !important;
+}
+
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-literal,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type {
+    color: var(--vscode-symbolIcon-stringForeground, #ce9178) !important;
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+    color: var(--vscode-editorLineNumber-foreground, #6a9955) !important;
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+    color: var(--vscode-symbolIcon-operatorForeground, #d4d4d4) !important;
+}
+
+.hljs-number,
+.hljs-regexp,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link {
+    color: var(--vscode-symbolIcon-numberForeground, #b5cea8) !important;
+}
+
+.hljs-function,
+.hljs-function .hljs-title {
+    color: var(--vscode-symbolIcon-functionForeground, #dcdcaa) !important;
+}
+
+.hljs-params {
+    color: var(--vscode-symbolIcon-variableForeground, #9cdcfe) !important;
+}
