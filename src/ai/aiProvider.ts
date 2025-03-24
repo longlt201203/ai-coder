@@ -8,6 +8,8 @@ import {
 import { Stream } from "@anthropic-ai/sdk/streaming.mjs";
 import { encode } from "gpt-tokenizer";
 import { ContextItem } from "./context-item";
+import * as path from "path";
+import * as fs from "fs";
 
 export interface AIProvider {
   generateResponse(
@@ -88,10 +90,10 @@ class AnthropicProvider implements AIProvider {
   ): Promise<string> {
     // Prepare context text from the context items
     const contextText = this.prepareContextText(contextItems);
-
+  
     // Prepare messages with context
     const messages = this.prepareMessages(contextText, prompt);
-
+  
     try {
       // Call Anthropic API with streaming and tools
       const stream = await this.anthropic!.messages.create({
@@ -101,12 +103,12 @@ class AnthropicProvider implements AIProvider {
         temperature: 0.7,
         stream: true,
       });
-
+  
       // Process the stream and handle tool uses
       return await this.processResponseStream(stream, onPartialResponse);
     } catch (error) {
       console.error("Error in processRequestWithContext:", error);
-
+  
       // Handle rate limiting and overloaded errors
       if (error instanceof Error) {
         const errorMessage = error.message.toLowerCase();
@@ -121,10 +123,10 @@ class AnthropicProvider implements AIProvider {
               "\n\nThe AI service is currently overloaded. Waiting to retry...\n\n"
             );
           }
-
+  
           // Wait for 3 seconds before retrying
           await new Promise((resolve) => setTimeout(resolve, 3000));
-
+  
           // Retry the request with reduced context if possible
           if (contextItems.length > 1) {
             // Try with half the context items
@@ -143,7 +145,7 @@ class AnthropicProvider implements AIProvider {
           }
         }
       }
-
+  
       // If we can't handle the error, rethrow it
       throw error;
     }
@@ -346,8 +348,27 @@ class AnthropicProvider implements AIProvider {
       // Process each context item
       for (const item of contextItems) {
         if (typeof item === "string") {
-          // Handle legacy string items
-          contextText += item + "\n\n";
+          try {
+            // Check if the file is an image by extension
+            const ext = path.extname(item).toLowerCase();
+            const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext);
+
+            if (isImage) {
+              // For image files, just add a reference instead of trying to read the content
+              contextText += `\n[Image file: ${path.basename(item)}]\n`;
+              continue;
+            }
+
+            // For regular files, read and process as before
+            const content = fs.readFileSync(item, "utf8");
+            const fileName = path.basename(item);
+            const fileExt = path.extname(fileName).substring(1);
+
+            contextText += `\n--- ${fileName} ---\n\`\`\`${fileExt}\n${content}\n\`\`\`\n`;
+          } catch (error) {
+            console.error(`Error reading file ${item}:`, error);
+            contextText += `\n[Error reading file: ${path.basename(item)}]\n`;
+          }
         } else {
           // Handle structured context items
           switch (item.type) {
@@ -393,17 +414,50 @@ class AnthropicProvider implements AIProvider {
 
     // Add history messages
     for (const msg of history) {
-      messages.push({
-        role: msg.role,
-        content: msg.content,
-      });
+      if (typeof msg.content === 'object' && msg.content.type === 'image_message') {
+        // This is an image message
+        const imageData = msg.content;
+
+        // Create a message with both image and text content
+        messages.push({
+          role: msg.role,
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: `image/${imageData.imageType}`,
+                data: imageData.base64Data
+              }
+            },
+            {
+              type: "text",
+              text: prompt || "Please analyze this image."
+            }
+          ]
+        });
+      } else {
+        // Regular text message
+        messages.push({
+          role: msg.role,
+          content: msg.content,
+        });
+      }
     }
 
-    // Add the current message with context
-    messages.push({
-      role: "user",
-      content: contextText + prompt,
-    });
+    const lastMessage = messages[messages.length - 1];
+    const isImageMessageJustAdded =
+      lastMessage &&
+      lastMessage.role === 'user' &&
+      Array.isArray(lastMessage.content) &&
+      lastMessage.content.some(item => item.type === 'image');
+
+    if (!isImageMessageJustAdded) {
+      messages.push({
+        role: "user",
+        content: contextText + prompt,
+      });
+    }
 
     return messages as MessageParam[];
   }
@@ -488,15 +542,27 @@ class AnthropicProvider implements AIProvider {
     return fullResponse;
   }
 
-  public addImageToHistory(name: string, dataUrl: string): void {
-    // We need to use the contextManager to add to history
-    // Create a special content format for images
-    const imageContent = `[Image: ${name}]\ndata:image;${dataUrl}`;
+  addImageToHistory(name: string, dataUrl: string): void {
+    console.log(`Adding image ${name} to history`);
 
-    // Add to the chat history through the context manager
-    this.contextManager.addToHistory('user', imageContent);
+    // Extract the base64 data from the data URL
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      console.error('Invalid image data format');
+      return;
+    }
 
-    console.log(`Added image ${name} to chat history`);
+    const imageType = matches[1];
+    const base64Data = matches[2];
+
+    // Store the image data in the conversation history
+    // We'll use a special format that we can detect later when preparing messages
+    this.contextManager.addToHistory("user", {
+      type: "image_message",
+      name: name,
+      imageType: imageType,
+      base64Data: base64Data
+    });
   }
 
   async configureApiKey(): Promise<boolean> {

@@ -229,6 +229,9 @@ function updateContextItems(items) {
 
         if (item.isDirectory) {
             iconClass = 'fa-solid fa-folder';
+        } else if (item.isImage) {
+            // Add special handling for image files
+            iconClass = 'fa-solid fa-image';
         } else {
             // Get file extension
             const extension = item.name.split('.').pop().toLowerCase();
@@ -638,6 +641,10 @@ window.addEventListener('message', event => {
     switch (message.type) {
         case 'updateContext':
             updateContextItems(message.contextItems);
+
+            if (message.imageItems) {
+                updateImageContextItems(message.imageItems);
+            }
             break;
         case 'addMessage':
             // Fix the parameter order and log for debugging
@@ -701,6 +708,58 @@ window.addEventListener('message', event => {
             break;
     }
 });
+
+function updateImageContextItems(items) {
+    console.log('Updating image context items in UI:', items);
+    const imageContextContainer = document.getElementById('imageContextItems');
+    
+    if (!imageContextContainer) {
+        console.error('Image context container not found');
+        return;
+    }
+
+    if (!items || items.length === 0) {
+        imageContextContainer.innerHTML = '<div class="empty-context">No images in context</div>';
+        return;
+    }
+
+    // Create a Set to track unique paths and avoid duplicates
+    const uniquePaths = new Set();
+    let html = '';
+
+    for (const item of items) {
+        // Skip if we've already added this path or if it's not an image
+        if (uniquePaths.has(item.path) || !item.isImage) {
+            continue;
+        }
+
+        uniquePaths.add(item.path);
+
+        html += `
+            <div class="context-item image-context-item" data-path="${item.path}">
+                <span class="context-item-icon fa-solid fa-image"></span>
+                <span class="context-item-name" title="${item.path}">${item.name}</span>
+                <span class="context-item-remove fa-solid fa-xmark" title="Remove from context"></span>
+            </div>
+        `;
+    }
+
+    imageContextContainer.innerHTML = html;
+
+    // Add event listeners to remove buttons
+    imageContextContainer.querySelectorAll('.context-item-remove').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const item = e.target.closest('.context-item');
+            const path = item.dataset.path;
+            vscode.postMessage({
+                type: 'contextAction',
+                action: 'removeImage',
+                path: path
+            });
+            e.stopPropagation();
+        });
+    });
+}
 
 function addImageToChat(imageData, role) {
     const messageElement = document.createElement('div');

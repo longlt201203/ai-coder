@@ -112,50 +112,62 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async _handleImageUploadData(imageData: any): Promise<void> {
         try {
             console.log('Handling image upload from webview');
-            
+
             // Extract the image data from the data URL
             const matches = imageData.dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
             if (!matches || matches.length !== 3) {
                 throw new Error('Invalid image data format');
             }
-            
+
             const imageExt = matches[1];
             const base64Data = matches[2];
             const buffer = Buffer.from(base64Data, 'base64');
-            
+
             // Create a unique filename in the workspace
             const workspaceRoot = this._getWorkspaceRoot();
             if (!workspaceRoot) {
                 throw new Error('No workspace folder is open');
             }
-            
+
             // Create an images directory in the workspace if it doesn't exist
             const imagesDir = path.join(workspaceRoot, '.ai-coder-images');
             if (!fs.existsSync(imagesDir)) {
                 fs.mkdirSync(imagesDir, { recursive: true });
             }
-            
+
             // Create a unique filename
             const timestamp = new Date().getTime();
             const filename = `${imageData.name.replace(/\.[^/.]+$/, '')}_${timestamp}.${imageExt}`;
             const filePath = path.join(imagesDir, filename);
-            
+
             // Write the image to disk
             fs.writeFileSync(filePath, buffer);
-            
-            // Add to context as a regular file
-            this._contextManager.addToSelectedContext(filePath);
-            
-            // Update context in webview
-            this._sendContextToAllWebviews();
-            
-            // Notify the user
-            vscode.window.showInformationMessage(`Image saved to ${filePath} and added to context`);
-            
-            console.log(`Image saved to ${filePath} and added to context`);
+
+            // Add to image context instead of regular context
+            this._contextManager.addImageToContext(filePath);
+
+            // Also add to AI provider's history with the full data URL
+            this._aiProvider.addImageToHistory(filename, imageData.dataUrl);
+
+            // Update context items in the UI
+            this._sendContextToWebview();
+
+            // Show a message to the user to prompt for a question about the image
+            const targetWebview =
+                (this._panel ? this._panel.webview : undefined) ||
+                (this._view ? this._view.webview : undefined);
+
+            if (targetWebview) {
+                targetWebview.postMessage({
+                    type: 'systemMessage',
+                    content: `Image "${filename}" uploaded. Please ask a question about it.`
+                });
+            }
+
+            console.log(`Image saved to ${filePath} and added to image context`);
         } catch (error) {
-            console.error('Error processing uploaded image:', error);
-            vscode.window.showErrorMessage(`Failed to process image: ${error instanceof Error ? error.message : String(error)}`);
+            console.error('Error handling image upload:', error);
+            vscode.window.showErrorMessage(`Error uploading image: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -186,7 +198,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     /**
      * Send the current context items to the webview
      */
-    private _sendContextToWebview(webview?: vscode.Webview) {
+    private async _sendContextToWebview(webview?: vscode.Webview) {
         const targetWebview = webview ||
             (this._panel ? this._panel.webview : undefined) ||
             (this._view ? this._view.webview : undefined);
@@ -198,8 +210,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // Check if webview is responsive
         this._checkWebviewResponsive(targetWebview);
 
-        const contextItems = this._contextManager.getSelectedContextItems();
-        const formattedItems = contextItems.map(item => {
+        // Get regular context items
+        const contextItems = await this._contextManager.getSelectedContextItems();
+
+        // Split items into regular and image items
+        const imageItems = [];
+        const regularItems = [];
+
+        for (const item of contextItems) {
             let isDirectory = false;
             let isImage = false;
 
@@ -217,19 +235,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 console.error(`Error checking path: ${item}`, error);
             }
 
-            return {
+            const formattedItem = {
                 path: item,
                 name: path.basename(item),
                 isDirectory: isDirectory,
                 isImage: isImage
             };
-        });
 
-        console.log('Sending context to webview:', formattedItems);
+            if (isImage) {
+                imageItems.push(formattedItem);
+            } else {
+                regularItems.push(formattedItem);
+            }
+        }
+
+        console.log('Sending context to webview:', {
+            regularItems,
+            imageItems
+        });
 
         targetWebview.postMessage({
             type: 'updateContext',
-            contextItems: formattedItems
+            contextItems: regularItems,
+            imageItems: imageItems
         });
     }
 
@@ -259,10 +287,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         } else if (message.action === 'remove' && message.path) {
             this._contextManager.removeFromSelectedContext(message.path);
             this._sendContextToWebview(webview);
+        } else if (message.action === 'removeImage' && message.path) {
+            this._contextManager.removeImageFromContext(message.path);
+            this._sendContextToWebview(webview);
         } else if (message.action === 'clear') {
             this._contextManager.clearSelectedContext();
             this._sendContextToWebview(webview);
             vscode.window.showInformationMessage('Context cleared');
+        } else if (message.action === 'clearImageContext') {
+            this._contextManager.clearImageContext();
+            this._sendContextToWebview(webview);
+            vscode.window.showInformationMessage('Image context cleared');
         } else if (message.action === 'addCustom' && message.paths && message.paths.length > 0) {
             console.log('Adding custom paths to context:', message.paths);
 
