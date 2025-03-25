@@ -5,11 +5,13 @@ import { DirectoryMetadata } from './directory-metadata';
 import ignore from 'ignore';
 import { ChatHistoryItem } from './chat-history-item';
 import { ChatContent } from './chat-content';
+import { ContextItem } from '../ai/context-item';
 
 export class ContextManager {
     private chatHistory: ChatHistoryItem[] = [];
     private selectedContextItems: string[] = []; // Store user-selected files/folders
     private imageContextItems: Set<string> = new Set();
+    private inMemoryImages: Map<string, string> = new Map();
 
     constructor(private context: vscode.ExtensionContext) {
         // Load saved context items
@@ -19,28 +21,29 @@ export class ContextManager {
         }
     }
 
-    addImageToContext(path: string): void {
-        this.imageContextItems.add(path);
-        // Trigger change event
-        // this._onContextChanged.fire();
+    addImageToContext(imageId: string, dataUrl: string): void {
+        this.inMemoryImages.set(imageId, dataUrl);
+        // Trigger change event if needed
     }
 
     getImageContextItems(): string[] {
         return Array.from(this.imageContextItems);
     }
 
-    removeImageFromContext(path: string): void {
-        this.imageContextItems.delete(path);
+    getInMemoryImages(): Map<string, string> {
+        return this.inMemoryImages;
+    }
+
+    removeImageFromContext(imageId: string): void {
+        this.inMemoryImages.delete(imageId);
         // Also remove from selected context if it exists there
-        this.removeFromSelectedContext(path);
-        // Trigger change event
-        // this._onContextChanged.fire();
+        this.removeFromSelectedContext(imageId);
+        // Trigger change event if needed
     }
 
     clearImageContext(): void {
         this.imageContextItems.clear();
-        // Trigger change event
-        // this._onContextChanged.fire();
+        this.inMemoryImages.clear();
     }
 
     /**
@@ -189,47 +192,8 @@ export class ContextManager {
      * Get relevant context based on user query
      */
     async getRelevantContext(query: string): Promise<string[]> {
-        const contextItems: string[] = [];
-
-        // Add current editor content
-        const currentContent = await this.getCurrentEditorContent();
-        if (currentContent) {
-            contextItems.push(currentContent);
-        }
-
-        // Add user-selected context items
-        for (const itemPath of this.selectedContextItems) {
-            try {
-                if (!fs.existsSync(itemPath)) {
-                    console.warn(`Skipping non-existent context item: ${itemPath}`);
-                    continue;
-                }
-
-                const stats = fs.statSync(itemPath);
-
-                if (stats.isFile()) {
-                    // If it's a file, add its content
-                    const content = await this.getFileContent(itemPath);
-                    if (content) {
-                        contextItems.push(content);
-                    }
-                } else if (stats.isDirectory()) {
-                    // If it's a directory, add directory structure information
-                    const dirStructure = await this.getDirectoryStructure(itemPath);
-                    if (dirStructure) {
-                        contextItems.push(dirStructure);
-                    }
-
-                    // Then add relevant files from the directory
-                    const dirFiles = await this.getRelevantFiles();
-                    contextItems.push(...dirFiles);
-                }
-            } catch (error) {
-                console.error(`Error processing context item ${itemPath}:`, error);
-            }
-        }
-
-        return contextItems;
+        // Simply return the selected context items
+        return this.selectedContextItems;
     }
 
     /**
@@ -490,19 +454,15 @@ export class ContextManager {
             console.warn(`Cannot add non-existent item to context: ${itemPath}`);
             return;
         }
-
+    
         // Check if the item is already in the context
         if (!this.selectedContextItems.includes(itemPath)) {
             this.selectedContextItems.push(itemPath);
-
+    
             // Save the updated context
             this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
-
-            // If it's a directory, analyze it to build metadata
-            if (fs.statSync(itemPath).isDirectory()) {
-                this.analyzeAndStoreDirectoryMetadata(itemPath);
-            }
-
+    
+            // We no longer analyze directories here
             console.log(`Added to context: ${itemPath}`);
         }
     }
@@ -802,42 +762,16 @@ export class ContextManager {
     async getSelectedContextItems(): Promise<string[]> {
         const contextItems: string[] = [];
 
-        // // Add current editor content
-        // const currentContent = await this.getCurrentEditorContent();
-        // if (currentContent) {
-        //     contextItems.push(currentContent);
-        // }
-
-        // Add user-selected context items
-        for (const itemPath of this.selectedContextItems) {
-            try {
-                if (!fs.existsSync(itemPath)) {
-                    console.warn(`Skipping non-existent context item: ${itemPath}`);
-                    continue;
-                }
-
-                const stats = fs.statSync(itemPath);
-
-                if (stats.isFile()) {
-                    // If it's a file, add its content
-                    const content = await this.getFileContent(itemPath);
-                    if (content) {
-                        contextItems.push(content);
-                    }
-                } else if (stats.isDirectory()) {
-                    // If it's a directory, add directory structure information
-                    const dirStructure = await this.getDirectoryStructure(itemPath);
-                    if (dirStructure) {
-                        contextItems.push(dirStructure);
-                    }
-
-                    // Then add relevant files from the directory
-                    const dirFiles = await this.getSelectedContextItems();
-                    contextItems.push(...dirFiles);
-                }
-            } catch (error) {
-                console.error(`Error processing context item ${itemPath}:`, error);
+        // Add existing file/folder context items
+        for (const item of this.selectedContextItems) {
+            if (fs.existsSync(item)) {
+                contextItems.push(item);
             }
+        }
+
+        // Add in-memory image IDs
+        for (const imageId of this.inMemoryImages.keys()) {
+            contextItems.push(imageId);
         }
 
         return contextItems;

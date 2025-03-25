@@ -16,6 +16,11 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize the context manager to handle workspace, files, and history
         const contextManager = new ContextManager(context);
         
+        // Clear context on extension reload/activation
+        contextManager.clearSelectedContext();
+        contextManager.clearImageContext();
+        outputChannel.appendLine('Context cleared on extension activation');
+        
         // Initialize the AI provider with the context manager
         const aiProvider = initializeAIProvider(context, contextManager);
         

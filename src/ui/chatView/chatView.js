@@ -665,7 +665,7 @@ window.addEventListener('message', event => {
             aiMessageDiv.className = 'message ai-message';
             aiMessageDiv.innerHTML = ''; // Start empty
             messagesContainer.appendChild(aiMessageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            // messagesContainer.scrollTop = messagesContainer.scrollHeight;
             break;
 
         case 'appendToAIMessage':
@@ -687,7 +687,7 @@ window.addEventListener('message', event => {
                 setFormatedText(currentAiMessage, updatedMarkdown);
 
                 // Scroll to the bottom
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                // messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
             break;
 
@@ -786,7 +786,7 @@ function addImageToChat(imageData, role) {
     messageElement.appendChild(img);
 
     messagesContainer.appendChild(messageElement);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function showExpandedImage(src, title) {
@@ -853,7 +853,7 @@ function addMessage(content, role) {
     }
 
     messagesContainer.appendChild(messageElement);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 // Show/hide typing indicator - ensure this is the only definition
@@ -870,6 +870,6 @@ function setTypingIndicator(isTyping) {
         typingIndicator.id = 'typing-indicator';
         typingIndicator.textContent = 'AI is typing...';
         messagesContainer.appendChild(typingIndicator);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 }

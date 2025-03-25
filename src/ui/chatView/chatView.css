@@ -308,6 +308,7 @@ body {
 
 .context-button.secondary {
   background-color: transparent;
+  color: var(--vscode-button-secondaryForeground);
   border: 1px solid var(--vscode-button-secondaryBackground);
 }
 

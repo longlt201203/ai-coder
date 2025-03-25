@@ -119,52 +119,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 throw new Error('Invalid image data format');
             }
 
-            const imageExt = matches[1];
-            const base64Data = matches[2];
-            const buffer = Buffer.from(base64Data, 'base64');
+            // Here we need to update to use in-memory storage instead of file system
+            const imageId = `image_${new Date().getTime()}`;
 
-            // Create a unique filename in the workspace
-            const workspaceRoot = this._getWorkspaceRoot();
-            if (!workspaceRoot) {
-                throw new Error('No workspace folder is open');
-            }
+            // Add to AI provider's history with the data URL directly
+            this._aiProvider.addImageToHistory(imageId, imageData.dataUrl);
 
-            // Create an images directory in the workspace if it doesn't exist
-            const imagesDir = path.join(workspaceRoot, '.ai-coder-images');
-            if (!fs.existsSync(imagesDir)) {
-                fs.mkdirSync(imagesDir, { recursive: true });
-            }
-
-            // Create a unique filename
-            const timestamp = new Date().getTime();
-            const filename = `${imageData.name.replace(/\.[^/.]+$/, '')}_${timestamp}.${imageExt}`;
-            const filePath = path.join(imagesDir, filename);
-
-            // Write the image to disk
-            fs.writeFileSync(filePath, buffer);
-
-            // Add to image context instead of regular context
-            this._contextManager.addImageToContext(filePath);
-
-            // Also add to AI provider's history with the full data URL
-            this._aiProvider.addImageToHistory(filename, imageData.dataUrl);
+            // Also add to context manager's in-memory images
+            this._contextManager.addImageToContext(imageId, imageData.dataUrl);
 
             // Update context items in the UI
-            this._sendContextToWebview();
+            this._sendContextToAllWebviews();
 
-            // Show a message to the user to prompt for a question about the image
-            const targetWebview =
-                (this._panel ? this._panel.webview : undefined) ||
-                (this._view ? this._view.webview : undefined);
-
-            if (targetWebview) {
-                targetWebview.postMessage({
-                    type: 'systemMessage',
-                    content: `Image "${filename}" uploaded. Please ask a question about it.`
-                });
-            }
-
-            console.log(`Image saved to ${filePath} and added to image context`);
+            console.log(`Image processed and added to context`);
         } catch (error) {
             console.error('Error handling image upload:', error);
             vscode.window.showErrorMessage(`Error uploading image: ${error instanceof Error ? error.message : String(error)}`);
@@ -211,6 +178,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this._checkWebviewResponsive(targetWebview);
 
         // Get regular context items
+        const inMemoryImages = this._contextManager.getInMemoryImages();
         const contextItems = await this._contextManager.getSelectedContextItems();
 
         // Split items into regular and image items
@@ -218,6 +186,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const regularItems = [];
 
         for (const item of contextItems) {
+            if (inMemoryImages.has(item)) {
+                imageItems.push({
+                    path: item,
+                    name: item,
+                    isDirectory: false,
+                    isImage: true,
+                    dataUrl: inMemoryImages.get(item)
+                });
+                continue;
+            }
+
             let isDirectory = false;
             let isImage = false;
 
@@ -444,10 +423,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         console.log('Handling user message:', message);
 
         // Add user message to UI
+        const messageId = Date.now().toString();
         targetWebview.postMessage({
             type: 'addMessage',
+            role: 'user',
             content: message,
-            role: 'user'
+            messageId: messageId
+        });
+
+        const aiMessageId = Date.now().toString();
+        targetWebview.postMessage({
+            type: 'startAIMessage',
+            messageId: aiMessageId
         });
 
         // Show typing indicator
@@ -457,31 +444,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         });
 
         try {
-            // Get context for the query
-            const contextItems = await this._contextManager.getRelevantContext(message);
+            // Get context paths (not content)
+            const contextPaths = await this._contextManager.getRelevantContext(message);
 
-            // Create a message ID for this response
-            const messageId = `msg-${Date.now()}`;
-
-            // Initialize an empty AI message
-            targetWebview.postMessage({
-                type: 'startAIMessage',
-                messageId: messageId
-            });
-
-            // Define a callback for handling partial responses
+            // Define callback for partial responses
             const onPartialResponse = (text: string) => {
                 targetWebview.postMessage({
                     type: 'appendToAIMessage',
                     content: text,
-                    messageId: messageId
+                    messageId: aiMessageId
                 });
             };
 
-            // Send message to AI provider with streaming callback
-            console.log('Sending message to AI provider with context items:', contextItems.length);
-            const response = await this._aiProvider.generateResponse(message, contextItems, onPartialResponse);
-            console.log('Received complete response from AI provider');
+            // Generate response with AI-driven context analysis
+            const response = await this._aiProvider.generateResponse(
+                message,
+                contextPaths,
+                onPartialResponse
+            );
 
             // Hide typing indicator
             targetWebview.postMessage({
@@ -489,29 +469,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 isTyping: false
             });
 
-            // Finalize the AI message
             targetWebview.postMessage({
                 type: 'finalizeAIMessage',
-                messageId: messageId
+                messageId: aiMessageId
             });
 
-            // Add to context manager history
+            // Add to history
             this._contextManager.addToHistory('user', message);
             this._contextManager.addToHistory('assistant', response);
         } catch (error) {
-            console.error('Error sending message to AI:', error);
+            console.error('Error handling user message:', error);
+
+            // Show error in chat
+            targetWebview.postMessage({
+                type: 'appendToAIMessage',
+                content: `\n\nError: ${error instanceof Error ? error.message : String(error)}`,
+                messageId: aiMessageId
+            });
 
             // Hide typing indicator
             targetWebview.postMessage({
                 type: 'typingIndicator',
                 isTyping: false
-            });
-
-            // Show error message
-            targetWebview.postMessage({
-                type: 'addMessage',
-                content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-                role: 'assistant'
             });
         }
     }
