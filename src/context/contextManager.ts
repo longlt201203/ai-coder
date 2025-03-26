@@ -14,7 +14,7 @@ export class ContextManager {
 
     constructor(private context: vscode.ExtensionContext) {
         // Load saved context items
-        const savedContext = this.context.globalState.get<string[]>('ai-coder.selectedContext');
+        const savedContext = this.context.globalState.get<string[]>('brain-reducer.selectedContext');
         if (savedContext) {
             this.selectedContextItems = savedContext.filter(item => fs.existsSync(item));
         }
@@ -208,7 +208,7 @@ export class ContextManager {
             let result = `Directory Structure: ${dirName} (${dirPath})\n`;
 
             // Get metadata if available
-            const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(dirPath)}`;
+            const metadataKey = `brain-reducer.dirMetadata.${this.sanitizePathForKey(dirPath)}`;
             const metadata = this.context.globalState.get<DirectoryMetadata>(metadataKey);
 
             if (metadata) {
@@ -463,7 +463,7 @@ export class ContextManager {
             this.selectedContextItems.push(itemPath);
     
             // Save the updated context
-            this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
+            this.context.globalState.update('brain-reducer.selectedContext', this.selectedContextItems);
     
             // We no longer analyze directories here
             console.log(`Added to context: ${itemPath}`);
@@ -485,7 +485,7 @@ export class ContextManager {
         };
 
         // Store metadata in extension state
-        const metadataKey = `ai-coder.dirMetadata.${this.sanitizePathForKey(dirPath)}`;
+        const metadataKey = `brain-reducer.dirMetadata.${this.sanitizePathForKey(dirPath)}`;
         this.context.globalState.update(metadataKey, metadata);
 
         console.log(`Analyzed directory: ${dirPath}, found ${fileList.length} files`);
@@ -747,7 +747,7 @@ export class ContextManager {
     removeFromSelectedContext(itemPath: string): void {
         this.selectedContextItems = this.selectedContextItems.filter(item => item !== itemPath);
         // Persist selected context
-        this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
+        this.context.globalState.update('brain-reducer.selectedContext', this.selectedContextItems);
     }
 
     /**
@@ -756,7 +756,7 @@ export class ContextManager {
     clearSelectedContext(): void {
         this.selectedContextItems = [];
         // Persist selected context
-        this.context.globalState.update('ai-coder.selectedContext', this.selectedContextItems);
+        this.context.globalState.update('brain-reducer.selectedContext', this.selectedContextItems);
     }
 
     /**

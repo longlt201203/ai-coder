@@ -1,6 +1,6 @@
-# AI Coder
+# Brain Reducer
 
-AI Coder is a VS Code extension that provides AI-powered coding assistance using Claude (Anthropic) and Gemini (Google) models.
+Brain Reducer is a VS Code extension that provides AI-powered coding assistance using Claude (Anthropic) and Gemini (Google) models.
 
 ## Features
 
@@ -23,7 +23,7 @@ AI Coder is a VS Code extension that provides AI-powered coding assistance using
 ### Starting a Chat
 
 1. Open the Command Palette (Ctrl+Shift+P)
-2. Run "AI Coder: Open Chat"
+2. Run "Brain Reducer: Open Chat"
 3. Type your question in the chat input
 
 ### Switching Models
@@ -45,7 +45,7 @@ Click the image upload button to include images in your conversation.
 
 ## Privacy
 
-AI Coder sends your code and queries to the selected AI provider (Anthropic or Google). Please review their privacy policies:
+Brain Reducer sends your code and queries to the selected AI provider (Anthropic or Google). Please review their privacy policies:
 - [Anthropic Privacy Policy](https://www.anthropic.com/privacy)
 - [Google AI Privacy Policy](https://ai.google.dev/privacy)
 

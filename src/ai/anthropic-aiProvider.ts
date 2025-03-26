@@ -216,7 +216,7 @@ export class AnthropicProvider implements AIProvider {
                 // Update VS Code context
                 await vscode.commands.executeCommand(
                     "setContext",
-                    "ai-coder.apiKeyConfigured",
+                    "brain-reducer.apiKeyConfigured",
                     false
                 );
                 
@@ -334,7 +334,7 @@ export class AnthropicProvider implements AIProvider {
                 // Update VS Code context
                 await vscode.commands.executeCommand(
                     "setContext",
-                    "ai-coder.apiKeyConfigured",
+                    "brain-reducer.apiKeyConfigured",
                     false
                 );
                 
@@ -894,7 +894,7 @@ export class AnthropicProvider implements AIProvider {
             // Store the API key in global state
             await vscode.commands.executeCommand(
                 "setContext",
-                "ai-coder.apiKeyConfigured",
+                "brain-reducer.apiKeyConfigured",
                 true
             );
 

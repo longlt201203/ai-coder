@@ -27,7 +27,7 @@ export function initializeAIProvider(
   contextManager: ContextManager
 ): AIProvider {
   // Get the selected model from context manager or default to 'anthropic'
-  const selectedModel = context.globalState.get<string>('ai-coder.selectedModel', 'anthropic');
+  const selectedModel = context.globalState.get<string>('brain-reducer.selectedModel', 'anthropic');
   
   // Create the appropriate provider based on the selected model
   globalProvider = createProviderForModel(selectedModel, context, contextManager);
@@ -51,7 +51,7 @@ function createProviderForModel(
     // Update VS Code context for UI elements
     vscode.commands.executeCommand(
       "setContext",
-      "ai-coder.geminiApiKeyConfigured",
+      "brain-reducer.geminiApiKeyConfigured",
       provider.isConfigured()
     );
     return provider;
@@ -61,7 +61,7 @@ function createProviderForModel(
     // Update VS Code context for UI elements
     vscode.commands.executeCommand(
       "setContext",
-      "ai-coder.apiKeyConfigured",
+      "brain-reducer.apiKeyConfigured",
       provider.isConfigured()
     );
     return provider;
@@ -79,7 +79,7 @@ export async function switchAIProvider(
   console.log(`Switching AI provider to ${modelType}`);
   
   // Store the selected model in global state
-  await context.globalState.update('ai-coder.selectedModel', modelType);
+  await context.globalState.update('brain-reducer.selectedModel', modelType);
   
   // Create the new provider
   globalProvider = createProviderForModel(modelType, context, contextManager);

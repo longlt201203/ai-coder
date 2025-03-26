@@ -5,7 +5,7 @@ import { AIProvider, switchAIProvider } from '../../ai/aiProvider';
 import { ContextManager } from '../../context/contextManager';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'ai-coder.chatView';
+    public static readonly viewType = 'brain-reducer.chatView';
     private _view?: vscode.WebviewView;
     private _panel?: vscode.WebviewPanel;
 

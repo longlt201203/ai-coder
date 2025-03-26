@@ -9,7 +9,7 @@ export function registerCommands(
 ) {
     // Command to configure API key
     const configureApiKeyCommand = vscode.commands.registerCommand(
-        'ai-coder.configureApiKey',
+        'brain-reducer.configureApiKey',
         async () => {
             const configured = await aiProvider.configureApiKey();
             if (configured) {
@@ -22,7 +22,7 @@ export function registerCommands(
 
     // Command to open the chat view
     const openChatViewCommand = vscode.commands.registerCommand(
-        'ai-coder.openChat',
+        'brain-reducer.openChat',
         () => {
             // Instead of opening the sidebar view, create a webview panel on the right side
             if (chatView && typeof chatView.openChatPanel === 'function') {

@@ -877,13 +877,13 @@ function setTypingIndicator(isTyping) {
 const modelSelector = document.getElementById('modelSelector');
 
 // Get the current model from localStorage or default to 'anthropic'
-const currentModel = localStorage.getItem('ai-coder.selectedModel') || 'anthropic';
+const currentModel = localStorage.getItem('brain-reducer.selectedModel') || 'anthropic';
 modelSelector.value = currentModel;
 
 // Add event listener for model changes
 modelSelector.addEventListener('change', () => {
     const selectedModel = modelSelector.value;
-    localStorage.setItem('ai-coder.selectedModel', selectedModel);
+    localStorage.setItem('brain-reducer.selectedModel', selectedModel);
 
     // Notify the extension about the model change
     vscode.postMessage({

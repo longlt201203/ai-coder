@@ -1,6 +1,6 @@
 {
-  "name": "ai-coder",
-  "displayName": "AI Coder",
+  "name": "brain-reducer",
+  "displayName": "Brain Reducer",
   "description": "AI-powered coding assistant with Claude and Gemini integration",
   "version": "0.0.1",
   "publisher": "longlt201203",
@@ -39,17 +39,17 @@
   "contributes": {
     "commands": [
       {
-        "command": "ai-coder.configureApiKey",
-        "title": "AI Coder: Configure Anthropic API Key"
+        "command": "brain-reducer.configureApiKey",
+        "title": "Brain Reducer: Configure Anthropic API Key"
       },
       {
-        "command": "ai-coder.openChat",
-        "title": "AI Coder: Open Chat"
+        "command": "brain-reducer.openChat",
+        "title": "Brain Reducer: Open Chat"
       }
     ],
     "keybindings": [
       {
-        "command": "ai-coder.openChat",
+        "command": "brain-reducer.openChat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
         "when": "editorTextFocus"
@@ -58,16 +58,16 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "ai-coder",
-          "title": "AI Coder",
-          "icon": "resources/icon.svg"
+          "id": "brain-reducer",
+          "title": "Brain Reducer",
+          "icon": "resources/icon.png"
         }
       ]
     },
     "views": {
-      "ai-coder": [
+      "brain-reducer": [
         {
-          "id": "ai-coder.chatView",
+          "id": "brain-reducer.chatView",
           "name": "AI Chat",
           "type": "webview"
         }

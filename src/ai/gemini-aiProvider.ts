@@ -172,7 +172,7 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
                 // Update VS Code context
                 await vscode.commands.executeCommand(
                     "setContext",
-                    "ai-coder.geminiApiKeyConfigured",
+                    "brain-reducer.geminiApiKeyConfigured",
                     false
                 );
                 
@@ -293,7 +293,7 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
                 // Update VS Code context
                 await vscode.commands.executeCommand(
                     "setContext",
-                    "ai-coder.geminiApiKeyConfigured",
+                    "brain-reducer.geminiApiKeyConfigured",
                     false
                 );
                 
@@ -772,7 +772,7 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
             // Store the API key in global state
             await vscode.commands.executeCommand(
                 "setContext",
-                "ai-coder.geminiApiKeyConfigured",
+                "brain-reducer.geminiApiKeyConfigured",
                 true
             );
             // Initialize the client with the new API key

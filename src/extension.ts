@@ -5,12 +5,11 @@ import { registerChatView } from './ui/chatView/chatView';
 import { registerCommands } from './commands/commands';
 import { ContextManager } from './context/contextManager';
 
-// Create an output channel for logging
-const outputChannel = vscode.window.createOutputChannel('AI Coder');
+// Create output channel for logging
+const outputChannel = vscode.window.createOutputChannel('Brain Reducer');
 
-// This method is called when your extension is activated
 export function activate(context: vscode.ExtensionContext) {
-    outputChannel.appendLine('AI-Coder extension is now activating...');
+    outputChannel.appendLine('Brain Reducer extension is now activating...');
     
     try {
         // Initialize the context manager to handle workspace, files, and history
@@ -31,14 +30,14 @@ export function activate(context: vscode.ExtensionContext) {
         registerCommands(context, aiProvider, chatView);
         
         // Register a simple hello world command directly here as a fallback
-        const helloWorldCommand = vscode.commands.registerCommand('ai-coder.helloWorld', () => {
+        const helloWorldCommand = vscode.commands.registerCommand('brain-reducer.helloWorld', () => {
             vscode.window.showInformationMessage('Hello from AI Coder!');
             outputChannel.appendLine('Hello World command executed');
         });
         context.subscriptions.push(helloWorldCommand);
         
         // Register direct commands for each feature to ensure they're available
-        const directConfigureCommand = vscode.commands.registerCommand('ai-coder.directConfigureApiKey', async () => {
+        const directConfigureCommand = vscode.commands.registerCommand('brain-reducer.directConfigureApiKey', async () => {
             outputChannel.appendLine('Direct configure API key command executed');
             if (aiProvider) {
                 const configured = await aiProvider.configureApiKey();
@@ -51,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
         context.subscriptions.push(directConfigureCommand);
         
-        outputChannel.appendLine('AI-Coder extension successfully activated!');
+        outputChannel.appendLine('Brain Reducer extension successfully activated!');
         outputChannel.show();
     } catch (error) {
         outputChannel.appendLine(`Error during activation: ${error}`);
@@ -59,7 +58,6 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {
-    outputChannel.appendLine('AI-Coder extension is being deactivated...');
+    outputChannel.appendLine('Brain Reducer extension is being deactivated...');
 }
