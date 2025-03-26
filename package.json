@@ -1,8 +1,8 @@
 {
   "name": "ai-coder",
   "displayName": "AI Coder",
-  "description": "AI-powered coding assistant using Claude API",
-  "version": "0.1.0",
+  "description": "AI-powered coding assistant with Claude and Gemini integration",
+  "version": "0.0.1",
   "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
@@ -16,9 +16,9 @@
   "keywords": [
     "ai",
     "claude",
+    "gemini",
     "coding assistant",
-    "code generation",
-    "anthropic"
+    "code generation"
   ],
   "icon": "resources/icon.png",
   "galleryBanner": {
@@ -87,6 +87,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/parse-gitignore": "^1.0.2",
     "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
@@ -98,7 +99,11 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.0",
     "axios": "^1.6.0",
-    "gpt-tokenizer": "^2.9.0"
+    "ejs": "^3.1.10",
+    "gpt-tokenizer": "^2.9.0",
+    "ignore": "^7.0.3",
+    "parse-gitignore": "^2.0.0"
   }
 }

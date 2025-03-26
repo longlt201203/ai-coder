@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { AIProvider } from '../ai/aiProvider';
-import { ContextManager } from '../context/contextManager';
-import { ChatViewProvider } from '../ui/chatView';
+import { ChatViewProvider } from '../ui/chatView/chatView';
 
 export function registerCommands(
     context: vscode.ExtensionContext,

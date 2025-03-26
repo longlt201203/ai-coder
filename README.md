@@ -1,24 +1,22 @@
 # AI Coder
 
-AI Coder is a VS Code extension that provides AI-powered coding assistance using the Claude API from Anthropic. It helps you write, understand, and refactor code with natural language interactions.
+AI Coder is a VS Code extension that provides AI-powered coding assistance using Claude (Anthropic) and Gemini (Google) models.
 
 ## Features
 
-- **AI Chat Interface**: Interact with Claude AI directly within VS Code
-- **Context-Aware Responses**: The AI understands your current file and project context
-- **Code Generation**: Generate code snippets based on your requirements
-
-## Requirements
-
-- VS Code 1.98.0 or higher
-- An Anthropic API key (Claude)
+- Chat with AI about your code
+- Get code suggestions and explanations
+- Analyze your codebase with AI
+- Support for both Claude and Gemini models
+- Image upload and analysis
+- Context-aware responses based on your current files
 
 ## Installation
 
 1. Install the extension from the VS Code Marketplace
-2. Open the Command Palette (Ctrl+Shift+P)
-3. Run the command "AI Coder: Configure API Key"
-4. Enter your Anthropic API key when prompted
+2. Configure your API key(s):
+   - For Claude: Get an API key from [Anthropic](https://console.anthropic.com/)
+   - For Gemini: Get an API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
 
 ## Usage
 
@@ -26,19 +24,30 @@ AI Coder is a VS Code extension that provides AI-powered coding assistance using
 
 1. Open the Command Palette (Ctrl+Shift+P)
 2. Run "AI Coder: Open Chat"
-3. Type your question or request in the chat panel
+3. Type your question in the chat input
 
-### Example Prompts
+### Switching Models
 
-- "Explain how this function works"
-- "Refactor this code to be more efficient"
-- "Create a unit test for this class"
-- "Add error handling to this function"
-- "Convert this JavaScript code to TypeScript"
+Use the model selector dropdown in the chat interface to switch between Claude and Gemini.
+
+### Adding Context
+
+Click the "Add Files/Folders" button to include specific files or folders as context for the AI.
+
+### Uploading Images
+
+Click the image upload button to include images in your conversation.
+
+## Requirements
+
+- VS Code 1.80.0 or higher
+- An API key from Anthropic (Claude) or Google (Gemini)
 
 ## Privacy
 
-This extension sends code snippets and your prompts to Anthropic's Claude API. Please review Anthropic's privacy policy for details on how your data is handled.
+AI Coder sends your code and queries to the selected AI provider (Anthropic or Google). Please review their privacy policies:
+- [Anthropic Privacy Policy](https://www.anthropic.com/privacy)
+- [Google AI Privacy Policy](https://ai.google.dev/privacy)
 
 ## License
 
