@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 import * as vscode from 'vscode';
 import { initializeAIProvider } from './ai/aiProvider';
-import { registerChatView } from './ui/chatView/chatView';
+import { registerChatView } from './ui/chatView';
 import { registerCommands } from './commands/commands';
 import { ContextManager } from './context/contextManager';
 

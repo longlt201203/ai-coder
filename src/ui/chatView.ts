@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AIProvider, switchAIProvider } from '../../ai/aiProvider';
-import { ContextManager } from '../../context/contextManager';
+import { AIProvider, switchAIProvider } from '../ai/aiProvider';
+import { ContextManager } from '../context/contextManager';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'brain-reducer.chatView';
@@ -516,11 +516,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private _getHtmlForWebview(webview: vscode.Webview) {
         // Get path to HTML file
-        const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'ui', 'chatView', 'chatView.html');
+        const htmlPath = path.join(this._extensionUri.fsPath, 'views', 'chatView', 'chatView.html');
 
         // Get paths to CSS and JS files
-        const cssPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView', 'chatView.css'));
-        const jsPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'chatView', 'chatView.js'));
+        const cssPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'views', 'chatView', 'chatView.css'));
+        const jsPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'views', 'chatView', 'chatView.js'));
 
         // Read the HTML file
         let html = fs.readFileSync(htmlPath, 'utf8');

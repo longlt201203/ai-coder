@@ -2,13 +2,25 @@
 
 All notable changes to the "Brain Reducer" extension will be documented in this file.
 
-## [0.0.3] - 2025-03-28
+## [0.0.5] - 2025-03-26
+### Fixed
+- Fixed dependency bundling issues by including node_modules
+- Separated view files from src directory
+- Updated all "AI Coder" references to "Brain Reducer"
+- Improved extension packaging for better compatibility
+
+## [0.0.4] - 2025-03-26
+### Fixed
+- Updated packaging scripts to fix dependency issues
+- Fixed command registration
+
+## [0.0.3] - 2025-03-26
 ### Fixed
 - Fixed dependency bundling issues
 - Updated API key context references
 - Improved extension packaging
 
-## [0.0.2] - 2025-03-27
+## [0.0.2] - 2025-03-26
 ### Changed
 - Renamed extension from "AI Coder" to "Brain Reducer"
 - Fixed API key configuration for Gemini model
