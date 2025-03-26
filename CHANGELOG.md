@@ -2,6 +2,12 @@
 
 All notable changes to the "Brain Reducer" extension will be documented in this file.
 
+## [0.0.3] - 2025-03-28
+### Fixed
+- Fixed dependency bundling issues
+- Updated API key context references
+- Improved extension packaging
+
 ## [0.0.2] - 2025-03-27
 ### Changed
 - Renamed extension from "AI Coder" to "Brain Reducer"

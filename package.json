@@ -2,7 +2,7 @@
   "name": "brain-reducer",
   "displayName": "Brain Reducer",
   "description": "AI-powered coding assistant with Claude and Gemini integration",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
@@ -81,8 +81,8 @@
     "pretest": "yarn run compile && yarn run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "vscode:package": "vsce package --no-yarn",
+    "vscode:publish": "vsce publish --no-yarn"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
