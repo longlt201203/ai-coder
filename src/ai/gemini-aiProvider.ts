@@ -30,10 +30,30 @@ export class GeminiProvider implements AIProvider {
         }
     }
     isConfigured(): boolean {
-        throw new Error("Method not implemented.");
+        return !!this.apiKey;
     }
+
     addImageToHistory(name: string, dataUrl: string): void {
-        throw new Error("Method not implemented.");
+        console.log(`Adding image ${name} to history`);
+
+        // Extract the base64 data from the data URL
+        const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+            console.error("Invalid image data format");
+            return;
+        }
+
+        const imageType = matches[1];
+        const base64Data = matches[2];
+
+        // Store the image data in the conversation history
+        // We'll use a special format that we can detect later when preparing messages
+        this.contextManager.addToHistory("user", {
+            type: "image_message",
+            name: name,
+            imageType: imageType,
+            base64Data: base64Data,
+        });
     }
 
     private initializeClient() {
@@ -133,9 +153,34 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
                 console.error("All parsing attempts failed:", firstError);
                 return [];
             }
-        } catch (error) {
-            console.error("Error in analyzeContextWithAI:", error);
-            return [];
+        } catch (error: any) {
+            // Handle API key errors specifically
+            if (error.status === 401 || 
+                error.status === 403 || 
+                (error.message && (
+                    error.message.includes("auth") || 
+                    error.message.includes("API key") || 
+                    error.message.includes("credential") ||
+                    error.message.includes("permission")
+                ))) {
+                
+                console.error("Authentication error with Gemini API:", error);
+                
+                // Clear the invalid API key
+                this.apiKey = undefined;
+                
+                // Update VS Code context
+                await vscode.commands.executeCommand(
+                    "setContext",
+                    "ai-coder.geminiApiKeyConfigured",
+                    false
+                );
+                
+                throw new Error("Authentication failed with Gemini API. Please reconfigure your API key.");
+            }
+            
+            // Rethrow other errors
+            throw error;
         }
     }
 
@@ -206,10 +251,6 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
                             content: `File: ${fileName}\n\n${content}`,
                             metadata: { fileName },
                         });
-
-                        if (onPartialResponse) {
-                            onPartialResponse(`Including file: ${fileName}\n`);
-                        }
                     }
                 } catch (error) {
                     console.error(`Error reading file ${filePath}:`, error);
@@ -217,6 +258,8 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
             }
 
             if (onPartialResponse) {
+                onPartialResponse(`Including files: ${relevantContextItems.map(item => typeof item === "string" ? item : item.metadata?.fileName).join(", ")}\n\n`);
+
                 onPartialResponse("\nGenerating response...\n\n");
             }
 
@@ -231,10 +274,48 @@ Example response format: ["C:\\\\path\\\\to\\\\file1.js", "C:\\\\path\\\\to\\\\f
             this.contextManager.addToHistory("assistant", batchedResponse);
 
             return batchedResponse;
-        } catch (error) {
-            console.error("Error in generateResponse:", error);
-            return `Error generating response: ${error instanceof Error ? error.message : String(error)
-                }`;
+        } catch (error: any) {
+            // Handle API key errors specifically
+            if (error.status === 401 || 
+                error.status === 403 || 
+                (error.message && (
+                    error.message.includes("auth") || 
+                    error.message.includes("API key") || 
+                    error.message.includes("credential") ||
+                    error.message.includes("permission")
+                ))) {
+                
+                console.error("Authentication error with Gemini API:", error);
+                
+                // Clear the invalid API key
+                this.apiKey = undefined;
+                
+                // Update VS Code context
+                await vscode.commands.executeCommand(
+                    "setContext",
+                    "ai-coder.geminiApiKeyConfigured",
+                    false
+                );
+                
+                // Prompt user to reconfigure
+                const action = await vscode.window.showErrorMessage(
+                    "Invalid or expired Gemini API key. Would you like to reconfigure it now?",
+                    "Yes", "No"
+                );
+                
+                if (action === "Yes") {
+                    const configured = await this.configureApiKey();
+                    if (configured) {
+                        // Retry the request with the new API key
+                        return this.generateResponse(prompt, contextItems, onPartialResponse);
+                    }
+                }
+                
+                throw new Error("Authentication failed with Gemini API. Please reconfigure your API key.");
+            }
+            
+            // Rethrow other errors
+            throw error;
         }
     }
 

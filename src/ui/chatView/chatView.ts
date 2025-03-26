@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AIProvider } from '../../ai/aiProvider';
+import { AIProvider, switchAIProvider } from '../../ai/aiProvider';
 import { ContextManager } from '../../context/contextManager';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -11,7 +11,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly _aiProvider: AIProvider,
+        private _aiProvider: AIProvider,
         private readonly _contextManager: ContextManager
     ) {
     }
@@ -53,6 +53,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'fileBrowser':
                     await this._handleFileBrowserAction(data, webviewView.webview);
+                    break;
+                case 'changeModel':
+                    await this._handleModelChange(data.model);
                     break;
             }
         });
@@ -100,6 +103,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'fileBrowser':
                     await this._handleFileBrowserAction(data, panel.webview);
                     break;
+                case 'changeModel':
+                    await this._handleModelChange(data.model);
+                    break;
             }
         });
 
@@ -107,6 +113,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         panel.onDidDispose(() => {
             this._panel = undefined;
         });
+    }
+
+    private async _handleModelChange(modelType: string): Promise<void> {
+        try {
+            // set the global instance of the AI provider
+            this._aiProvider = await switchAIProvider(modelType, this._contextManager.getVSCodeContext(), this._contextManager);
+            
+            // Show a notification
+            vscode.window.showInformationMessage(`Switched to ${modelType === 'anthropic' ? 'Claude' : 'Gemini'} model`);
+        } catch (error) {
+            console.error('Error changing model:', error);
+            vscode.window.showErrorMessage(`Error changing model: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     private async _handleImageUploadData(imageData: any): Promise<void> {

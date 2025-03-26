@@ -1,8 +1,8 @@
 {
   "name": "ai-coder",
   "displayName": "AI Coder",
-  "description": "AI-powered coding assistant using Claude API",
-  "version": "0.1.0",
+  "description": "AI-powered coding assistant with Claude and Gemini integration",
+  "version": "0.0.1",
   "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
@@ -16,9 +16,9 @@
   "keywords": [
     "ai",
     "claude",
+    "gemini",
     "coding assistant",
-    "code generation",
-    "anthropic"
+    "code generation"
   ],
   "icon": "resources/icon.png",
   "galleryBanner": {

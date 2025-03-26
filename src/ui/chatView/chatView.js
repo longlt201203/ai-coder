@@ -712,7 +712,7 @@ window.addEventListener('message', event => {
 function updateImageContextItems(items) {
     console.log('Updating image context items in UI:', items);
     const imageContextContainer = document.getElementById('imageContextItems');
-    
+
     if (!imageContextContainer) {
         console.error('Image context container not found');
         return;
@@ -873,3 +873,28 @@ function setTypingIndicator(isTyping) {
         // messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 }
+
+const modelSelector = document.getElementById('modelSelector');
+
+// Get the current model from localStorage or default to 'anthropic'
+const currentModel = localStorage.getItem('ai-coder.selectedModel') || 'anthropic';
+modelSelector.value = currentModel;
+
+// Add event listener for model changes
+modelSelector.addEventListener('change', () => {
+    const selectedModel = modelSelector.value;
+    localStorage.setItem('ai-coder.selectedModel', selectedModel);
+
+    // Notify the extension about the model change
+    vscode.postMessage({
+        type: 'changeModel',
+        model: selectedModel
+    });
+
+    // Add a system message to indicate the model change
+    const messageElement = document.createElement('div');
+    messageElement.className = 'message system-message';
+    messageElement.textContent = `Switched to ${selectedModel === 'anthropic' ? 'Claude (Anthropic)' : 'Gemini (Google)'} model`;
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+});

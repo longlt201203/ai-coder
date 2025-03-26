@@ -202,9 +202,29 @@ export class AnthropicProvider implements AIProvider {
                 console.error("Error parsing JSON from AI response:", parseError);
                 return [];
             }
-        } catch (error) {
-            console.error("Error in analyzeContextWithAI:", error);
-            return [];
+        } catch (error: any) {
+            // Handle API key errors specifically
+            if (error.status === 401 || 
+                (error.message && error.message.includes("auth")) || 
+                (error.message && error.message.includes("API key"))) {
+                
+                console.error("Authentication error with Anthropic API:", error);
+                
+                // Clear the invalid API key
+                this.apiKey = undefined;
+                
+                // Update VS Code context
+                await vscode.commands.executeCommand(
+                    "setContext",
+                    "ai-coder.apiKeyConfigured",
+                    false
+                );
+                
+                throw new Error("Authentication failed with Anthropic API. Please reconfigure your API key.");
+            }
+            
+            // Rethrow other errors
+            throw error;
         }
     }
 
@@ -284,7 +304,7 @@ export class AnthropicProvider implements AIProvider {
             }
 
             if (onPartialResponse) {
-                onPartialResponse(`Using context: ${relevantContextItems.join(", ")}`)
+                onPartialResponse(`Using context: ${relevantContextItems.map(item => typeof item === "string" ? item : item.metadata?.fileName).join(", ")}`)
 
                 onPartialResponse("\nGenerating response...\n\n");
             }
@@ -300,10 +320,43 @@ export class AnthropicProvider implements AIProvider {
             this.contextManager.addToHistory("assistant", batchedResponse);
 
             return batchedResponse;
-        } catch (error) {
-            console.error("Error in generateResponse:", error);
-            return `Error generating response: ${error instanceof Error ? error.message : String(error)
-                }`;
+        } catch (error: any) {
+            // Handle API key errors specifically
+            if (error.status === 401 || 
+                (error.message && error.message.includes("auth")) || 
+                (error.message && error.message.includes("API key"))) {
+                
+                console.error("Authentication error with Anthropic API:", error);
+                
+                // Clear the invalid API key
+                this.apiKey = undefined;
+                
+                // Update VS Code context
+                await vscode.commands.executeCommand(
+                    "setContext",
+                    "ai-coder.apiKeyConfigured",
+                    false
+                );
+                
+                // Prompt user to reconfigure
+                const action = await vscode.window.showErrorMessage(
+                    "Invalid or expired Anthropic API key. Would you like to reconfigure it now?",
+                    "Yes", "No"
+                );
+                
+                if (action === "Yes") {
+                    const configured = await this.configureApiKey();
+                    if (configured) {
+                        // Retry the request with the new API key
+                        return this.generateResponse(prompt, contextItems, onPartialResponse);
+                    }
+                }
+                
+                throw new Error("Authentication failed with Anthropic API. Please reconfigure your API key.");
+            }
+            
+            // Rethrow other errors
+            throw error;
         }
     }
 

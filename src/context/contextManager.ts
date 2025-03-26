@@ -5,7 +5,6 @@ import { DirectoryMetadata } from './directory-metadata';
 import ignore from 'ignore';
 import { ChatHistoryItem } from './chat-history-item';
 import { ChatContent } from './chat-content';
-import { ContextItem } from '../ai/context-item';
 
 export class ContextManager {
     private chatHistory: ChatHistoryItem[] = [];
@@ -19,6 +18,10 @@ export class ContextManager {
         if (savedContext) {
             this.selectedContextItems = savedContext.filter(item => fs.existsSync(item));
         }
+    }
+    
+    getVSCodeContext(): vscode.ExtensionContext {
+        return this.context;
     }
 
     addImageToContext(imageId: string, dataUrl: string): void {

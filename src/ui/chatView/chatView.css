@@ -893,3 +893,34 @@ body {
 .image-preview-remove:hover {
   opacity: 1;
 }
+
+.model-selector-container {
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.model-selector {
+  background-color: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  height: 28px;
+}
+
+.model-selector:hover {
+  background-color: var(--vscode-dropdown-listBackground);
+}
+
+.model-selector:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.model-selector option {
+  background-color: var(--vscode-dropdown-listBackground);
+  color: var(--vscode-dropdown-foreground);
+}
