@@ -1,9 +1,14 @@
 # Change Log
 
-All notable changes to the "AI Coder" extension will be documented in this file.
+All notable changes to the "Brain Reducer" extension will be documented in this file.
+
+## [0.0.2] - 2025-03-27
+### Changed
+- Renamed extension from "AI Coder" to "Brain Reducer"
+- Fixed API key configuration for Gemini model
+- Improved error handling for API requests
 
 ## [0.0.1] - 2025-03-26
-
 ### Added
 - Initial beta release
 - Support for Claude (Anthropic) and Gemini (Google) models
