@@ -3,7 +3,6 @@
 .vscode/**
 .vscode-test/**
 node_modules/**
-src/**
 .gitignore
 .yarnrc
 .eslintrc.json
@@ -11,9 +10,7 @@ eslint.config.mjs
 tsconfig.json
 vsc-extension-quickstart.md
 .vscode-test.mjs
-yarn.lock
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map
-**/*.ts
 **/.vscode-test.*

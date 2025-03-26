@@ -2,7 +2,7 @@
   "name": "brain-reducer",
   "displayName": "Brain Reducer",
   "description": "AI-powered coding assistant with Claude and Gemini integration",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
