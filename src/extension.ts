@@ -29,13 +29,6 @@ export function activate(context: vscode.ExtensionContext) {
         // Register all commands
         registerCommands(context, aiProvider, chatView);
         
-        // Register a simple hello world command directly here as a fallback
-        const helloWorldCommand = vscode.commands.registerCommand('brain-reducer.helloWorld', () => {
-            vscode.window.showInformationMessage('Hello from AI Coder!');
-            outputChannel.appendLine('Hello World command executed');
-        });
-        context.subscriptions.push(helloWorldCommand);
-        
         // Register direct commands for each feature to ensure they're available
         const directConfigureCommand = vscode.commands.registerCommand('brain-reducer.directConfigureApiKey', async () => {
             outputChannel.appendLine('Direct configure API key command executed');

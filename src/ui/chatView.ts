@@ -64,8 +64,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     public openChatPanel() {
         // Create and show panel
         const panel = vscode.window.createWebviewPanel(
-            'aiCoderChat',
-            'AI Coder Chat',
+            'brainReducerChat',
+            'Brain Reducer Chat',
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,

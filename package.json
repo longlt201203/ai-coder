@@ -27,11 +27,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/longlt201203/ai-coder"
+    "url": "https://github.com/longlt201203/brain-reducer"
   },
-  "homepage": "https://github.com/longlt201203/ai-coder/blob/main/README.md",
+  "homepage": "https://github.com/longlt201203/brain-reducer/blob/main/README.md",
   "bugs": {
-    "url": "https://github.com/longlt201203/ai-coder/issues"
+    "url": "https://github.com/longlt201203/brain-reducer/issues"
   },
   "license": "MIT",
   "activationEvents": [],

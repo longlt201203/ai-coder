@@ -16,7 +16,7 @@ Brain Reducer is a VS Code extension that provides AI-powered coding assistance 
 1. Install the extension from the VS Code Marketplace
 2. Configure your API key(s):
    - For Claude: Get an API key from [Anthropic](https://console.anthropic.com/)
-   - For Gemini: Get an API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - For Gemini: Get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ## Usage
 
