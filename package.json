@@ -2,7 +2,7 @@
   "name": "brain-reducer",
   "displayName": "Brain Reducer",
   "description": "AI-powered coding assistant with Claude and Gemini integration",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "longlt201203",
   "engines": {
     "vscode": "^1.98.0"
@@ -40,7 +40,7 @@
     "commands": [
       {
         "command": "brain-reducer.configureApiKey",
-        "title": "Brain Reducer: Configure Anthropic API Key"
+        "title": "Brain Reducer: Configure API Key"
       },
       {
         "command": "brain-reducer.openChat",

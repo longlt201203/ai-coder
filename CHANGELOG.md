@@ -2,6 +2,11 @@
 
 All notable changes to the "Brain Reducer" extension will be documented in this file.
 
+## [0.0.7] - 2025-03-27
+
+### Fixed
+- Change the title of the command "Brain Reducer: Configure Anthropic API Key" to "Brain Reducer: Configure API Key"
+
 ## [0.0.6] - 2025-03-27
 
 ### Fixed
