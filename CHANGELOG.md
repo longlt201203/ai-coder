@@ -2,6 +2,13 @@
 
 All notable changes to the "Brain Reducer" extension will be documented in this file.
 
+## [0.0.6] - 2025-03-27
+
+### Fixed
+- Fixed image handling in Gemini provider
+- Improved error handling for image processing
+- Added better type safety for Gemini API requests
+
 ## [0.0.5] - 2025-03-26
 ### Fixed
 - Fixed dependency bundling issues by including node_modules
